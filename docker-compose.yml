@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    container_name: lov-portal-api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tiarasabrina@host.docker.internal:5432/gold_lov-portal-cimb
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app

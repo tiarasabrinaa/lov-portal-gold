@@ -8,7 +8,7 @@ app = FastAPI(
     description="FastAPI scaffold with Swagger UI enabled for API development.",
 )
 
-app.include_router(api_router)
+app.include_router(api_router, prefix="/lov/v1")
 
 
 @app.get("/", tags=["root"])

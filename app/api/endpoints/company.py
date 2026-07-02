@@ -8,7 +8,7 @@ from app.schemas.company import CompanyRead
 router = APIRouter()
 
 
-@router.get("/get_data", summary="Get company data")
+@router.get("/", summary="Get company data")
 async def get_company_data(db: AsyncSession = Depends(get_db)) -> list[CompanyRead]:
     query = text(
         """

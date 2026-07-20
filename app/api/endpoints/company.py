@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from google.cloud import bigquery
 
 from app.core.database import get_db, qualified_table, run_query
@@ -67,4 +67,50 @@ async def search_company(
         bigquery.ScalarQueryParameter("limit", "INT64", limit),
     ]
     rows = await run_query(client, query, params)
+    return [CompanyRead(**row) for row in rows]
+
+
+@router.get("/by-region", summary="Search company by city and/or province")
+async def get_company_by_region(
+    city: str | None = None,
+    province: str | None = None,
+    client: bigquery.Client = Depends(get_db),
+) -> list[CompanyRead]:
+    if not city and not province:
+        raise HTTPException(status_code=400, detail="Provide at least one of: city, province")
+
+    conditions = []
+    params: list[bigquery.ScalarQueryParameter] = []
+    if city:
+        conditions.append("LOWER(primary_address_city) = LOWER(@city)")
+        params.append(bigquery.ScalarQueryParameter("city", "STRING", city))
+    if province:
+        conditions.append("LOWER(primary_address_province) = LOWER(@province)")
+        params.append(bigquery.ScalarQueryParameter("province", "STRING", province))
+
+    query = f"""
+        SELECT
+            {_EMPLOYER_COLUMNS}
+        FROM {qualified_table("employer")}
+        WHERE {" AND ".join(conditions)}
+        ORDER BY employer_name
+    """
+    rows = await run_query(client, query, params)
+    return [CompanyRead(**row) for row in rows]
+
+
+@router.get("/by-cif-status", summary="Filter company by whether CIF is present")
+async def get_company_by_cif_status(
+    has_cif: bool = True,
+    client: bigquery.Client = Depends(get_db),
+) -> list[CompanyRead]:
+    condition = "cif IS NOT NULL AND cif != ''" if has_cif else "cif IS NULL OR cif = ''"
+    query = f"""
+        SELECT
+            {_EMPLOYER_COLUMNS}
+        FROM {qualified_table("employer")}
+        WHERE {condition}
+        ORDER BY employer_name
+    """
+    rows = await run_query(client, query)
     return [CompanyRead(**row) for row in rows]

@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.occupation import OccupationRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all occupation data")
-async def get_all_occupation(db: AsyncSession = Depends(get_db)) -> list[OccupationRead]:
+async def get_all_occupation(client: bigquery.Client = Depends(get_db)) -> list[OccupationRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
             master_code,
             source_system,
@@ -22,7 +22,7 @@ async def get_all_occupation(db: AsyncSession = Depends(get_db)) -> list[Occupat
             create_by,
             update_date,
             update_by
-        FROM gold_occupation
+        FROM {qualified_table("occupation")}
         ORDER BY master_code
         """,
         OccupationRead,

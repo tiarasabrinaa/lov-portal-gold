@@ -1,27 +1,35 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.company_add import CompanyAddRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all company address data")
-async def get_all_company_add(db: AsyncSession = Depends(get_db)) -> list[CompanyAddRead]:
+async def get_all_company_add(client: bigquery.Client = Depends(get_db)) -> list[CompanyAddRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
-            address_type,
-            create_date,
-            create_by,
-            update_date,
-            update_by,
-            id_post_code
-        FROM gold_company_add
-        ORDER BY id_post_code, address_type
+            addr_id,
+            comp_id,
+            addr_type,
+            address_line,
+            rt_rw,
+            kelurahan,
+            kecamatan,
+            kabupaten_kota,
+            provinsi,
+            postal_code,
+            latitude,
+            longitude,
+            is_primary,
+            gold_load_ts
+        FROM {qualified_table("comp_addr")}
+        ORDER BY comp_id, addr_type
         """,
         CompanyAddRead,
     )

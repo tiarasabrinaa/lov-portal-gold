@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.job_title import JobTitleRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all job title data")
-async def get_all_job_title(db: AsyncSession = Depends(get_db)) -> list[JobTitleRead]:
+async def get_all_job_title(client: bigquery.Client = Depends(get_db)) -> list[JobTitleRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
             master_code,
             source_system,
@@ -22,7 +22,7 @@ async def get_all_job_title(db: AsyncSession = Depends(get_db)) -> list[JobTitle
             create_by,
             update_date,
             update_by
-        FROM gold_job_title
+        FROM {qualified_table("job_title")}
         ORDER BY master_code
         """,
         JobTitleRead,

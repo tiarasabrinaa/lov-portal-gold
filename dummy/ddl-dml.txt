@@ -1,0 +1,257 @@
+-- =====================================================================
+-- LOV GOLD LAYER — Dummy DDL & DML (BigQuery)
+-- Dataset: lov_gold
+-- Purpose: sandbox / demo schema for LoV Portal Gold-layer company
+--          master data (COMP, COMP_ADDR, COMP_GROUP, COMP_SHRLDR,
+--          COMP_CONT, KBLI_IDX, POSTCODE)
+-- Note: Gold layer is presented as current-state (no SCD2 here —
+--       SCD2 history lives in Silver, per your architecture decision).
+-- =====================================================================
+
+-- Replace `your_project` with your actual GCP project id before running,
+-- or drop the project prefix entirely if you run this with a default
+-- project already set in your BigQuery session.
+
+CREATE SCHEMA IF NOT EXISTS `your_project.lov_gold`
+OPTIONS (
+  location = 'asia-southeast2', -- Jakarta region
+  description = 'Gold layer: curated LoV (List of Values) company master data',
+  -- Not required anymore now that billing is enabled (this was the
+  -- sandbox-mode requirement), but kept here as good hygiene since
+  -- this is dummy/testing data — tables auto-expire instead of
+  -- lingering and quietly costing storage.
+  -- Set to NULL (remove these two lines) if you want this to become
+  -- permanent/production data with no auto-expiry.
+  default_table_expiration_days = 30,
+  default_partition_expiration_days = 30
+);
+
+-- =====================================================================
+-- 1. COMP — Company master
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.comp` (
+  comp_id           STRING       NOT NULL OPTIONS(description = 'Unique company identifier (surrogate key)'),
+  comp_code         STRING       OPTIONS(description = 'Business/source company code'),
+  comp_name         STRING       NOT NULL,
+  comp_short_name   STRING,
+  comp_type         STRING       OPTIONS(description = 'e.g. PT, CV, FIRMA, KOPERASI'),
+  npwp              STRING       OPTIONS(description = 'Tax ID, 15/16 digit'),
+  nib               STRING       OPTIONS(description = 'Nomor Induk Berusaha'),
+  kbli_code         STRING       OPTIONS(description = 'FK to kbli_idx.kbli_code'),
+  industry_sector   STRING,
+  incorporation_date DATE,
+  comp_status       STRING       OPTIONS(description = 'ACTIVE, INACTIVE, DISSOLVED'),
+  source_system     STRING       OPTIONS(description = 'e.g. MADAM, AHU, MANUAL'),
+  gold_load_ts      TIMESTAMP    NOT NULL OPTIONS(description = 'ETL load timestamp into Gold')
+)
+CLUSTER BY comp_id
+OPTIONS (
+  description = 'Gold: current-state company master (one row per company)'
+);
+
+-- =====================================================================
+-- 2. COMP_ADDR — Company address
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.comp_addr` (
+  addr_id           STRING       NOT NULL,
+  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
+  addr_type         STRING       OPTIONS(description = 'REGISTERED, DOMICILE, BRANCH, MAILING'),
+  address_line      STRING,
+  rt_rw             STRING,
+  kelurahan         STRING,
+  kecamatan         STRING,
+  kabupaten_kota    STRING,
+  provinsi          STRING,
+  postal_code       STRING       OPTIONS(description = 'FK to postcode.postal_code'),
+  latitude          FLOAT64,
+  longitude         FLOAT64,
+  is_primary        BOOL,
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY comp_id
+OPTIONS (
+  description = 'Gold: current company addresses, one-to-many with comp'
+);
+
+-- =====================================================================
+-- 3. COMP_GROUP — Corporate group / holding structure
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.comp_group` (
+  group_id          STRING       NOT NULL,
+  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id (member company)'),
+  parent_comp_id    STRING       OPTIONS(description = 'FK to comp.comp_id (holding/parent company)'),
+  group_name        STRING,
+  relationship_type STRING       OPTIONS(description = 'SUBSIDIARY, AFFILIATE, HOLDING'),
+  ownership_level   INT64        OPTIONS(description = 'Depth in group hierarchy'),
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY comp_id
+OPTIONS (
+  description = 'Gold: corporate group / ownership hierarchy'
+);
+
+-- =====================================================================
+-- 4. COMP_SHRLDR — Shareholders
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.comp_shrldr` (
+  shrldr_id         STRING       NOT NULL,
+  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
+  shareholder_name  STRING       NOT NULL,
+  shareholder_type  STRING       OPTIONS(description = 'INDIVIDUAL, CORPORATE, GOVERNMENT'),
+  identity_no       STRING       OPTIONS(description = 'KTP or corporate NPWP'),
+  ownership_pct     NUMERIC(5,2) OPTIONS(description = 'Ownership percentage, 0-100'),
+  shares_count      INT64,
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY comp_id
+OPTIONS (
+  description = 'Gold: shareholder composition per company'
+);
+
+-- =====================================================================
+-- 5. COMP_CONT — Company contact points
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.comp_cont` (
+  cont_id           STRING       NOT NULL,
+  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
+  contact_type      STRING       OPTIONS(description = 'PHONE, EMAIL, FAX, WEBSITE, PIC'),
+  contact_value     STRING,
+  pic_name          STRING       OPTIONS(description = 'Person in charge, if contact_type = PIC'),
+  is_primary        BOOL,
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY comp_id
+OPTIONS (
+  description = 'Gold: company contact points'
+);
+
+-- =====================================================================
+-- 6. KBLI_IDX — KBLI (Indonesian Standard Industrial Classification) index
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.kbli_idx` (
+  kbli_code         STRING       NOT NULL,
+  kbli_desc         STRING       NOT NULL,
+  kbli_category     STRING       OPTIONS(description = 'e.g. A, B, C section code'),
+  kbli_category_desc STRING,
+  risk_level        STRING       OPTIONS(description = 'LOW, MEDIUM, HIGH per OSS-RBA'),
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY kbli_code
+OPTIONS (
+  description = 'Gold: KBLI reference / lookup table'
+);
+
+-- =====================================================================
+-- 7. POSTCODE — Wilayah / postal code reference
+-- =====================================================================
+CREATE OR REPLACE TABLE `your_project.lov_gold.postcode` (
+  postal_code       STRING       NOT NULL,
+  kelurahan         STRING,
+  kecamatan         STRING,
+  kabupaten_kota    STRING,
+  provinsi          STRING,
+  gold_load_ts      TIMESTAMP    NOT NULL
+)
+CLUSTER BY postal_code
+OPTIONS (
+  description = 'Gold: wilayah / postal code reference (used for address matching)'
+);
+
+
+-- =====================================================================
+-- DML — Dummy data inserts
+-- =====================================================================
+
+-- 1. POSTCODE (load first, referenced by comp_addr)
+INSERT INTO `your_project.lov_gold.postcode`
+  (postal_code, kelurahan, kecamatan, kabupaten_kota, provinsi, gold_load_ts)
+VALUES
+  ('12190', 'Senayan',        'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', CURRENT_TIMESTAMP()),
+  ('40115', 'Braga',          'Sumur Bandung',  'Kota Bandung',    'Jawa Barat',  CURRENT_TIMESTAMP()),
+  ('60271', 'Genteng',        'Genteng',        'Kota Surabaya',   'Jawa Timur',  CURRENT_TIMESTAMP()),
+  ('20111', 'Petisah Tengah', 'Medan Petisah',  'Kota Medan',      'Sumatera Utara', CURRENT_TIMESTAMP());
+
+-- 2. KBLI_IDX
+INSERT INTO `your_project.lov_gold.kbli_idx`
+  (kbli_code, kbli_desc, kbli_category, kbli_category_desc, risk_level, gold_load_ts)
+VALUES
+  ('64190', 'Aktivitas Perantara Moneter Lainnya', 'K', 'Jasa Keuangan dan Asuransi', 'HIGH',   CURRENT_TIMESTAMP()),
+  ('62010', 'Aktivitas Pemrograman Komputer',      'J', 'Informasi dan Komunikasi',    'LOW',    CURRENT_TIMESTAMP()),
+  ('46900', 'Perdagangan Besar Berbagai Macam Barang', 'G', 'Perdagangan Besar dan Eceran', 'MEDIUM', CURRENT_TIMESTAMP()),
+  ('41011', 'Konstruksi Gedung Perkantoran',       'F', 'Konstruksi',                   'MEDIUM', CURRENT_TIMESTAMP());
+
+-- 3. COMP
+INSERT INTO `your_project.lov_gold.comp`
+  (comp_id, comp_code, comp_name, comp_short_name, comp_type, npwp, nib, kbli_code,
+   industry_sector, incorporation_date, comp_status, source_system, gold_load_ts)
+VALUES
+  ('CMP0000001', 'C-0001', 'PT Nusantara Digital Sejahtera', 'NDS', 'PT',
+   '01.234.567.8-901.000', '9120000012345', '62010', 'Technology',
+   DATE '2015-03-12', 'ACTIVE', 'MADAM', CURRENT_TIMESTAMP()),
+  ('CMP0000002', 'C-0002', 'PT Mitra Logistik Utama', 'MLU', 'PT',
+   '02.345.678.9-012.000', '9120000023456', '46900', 'Trading',
+   DATE '2010-07-01', 'ACTIVE', 'MADAM', CURRENT_TIMESTAMP()),
+  ('CMP0000003', 'C-0003', 'CV Bangun Karya Abadi', 'BKA', 'CV',
+   '03.456.789.0-123.000', '9120000034567', '41011', 'Construction',
+   DATE '2018-11-20', 'ACTIVE', 'AHU', CURRENT_TIMESTAMP()),
+  ('CMP0000004', 'C-0004', 'PT Sumber Finansial Indonesia', 'SFI', 'PT',
+   '04.567.890.1-234.000', '9120000045678', '64190', 'Financial Services',
+   DATE '2005-01-15', 'INACTIVE', 'MADAM', CURRENT_TIMESTAMP());
+
+-- 4. COMP_ADDR
+INSERT INTO `your_project.lov_gold.comp_addr`
+  (addr_id, comp_id, addr_type, address_line, rt_rw, kelurahan, kecamatan,
+   kabupaten_kota, provinsi, postal_code, latitude, longitude, is_primary, gold_load_ts)
+VALUES
+  ('ADR0000001', 'CMP0000001', 'REGISTERED', 'Jl. Jenderal Sudirman Kav. 25', '004/005',
+   'Senayan', 'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', '12190',
+   -6.2241, 106.8022, TRUE, CURRENT_TIMESTAMP()),
+  ('ADR0000002', 'CMP0000002', 'REGISTERED', 'Jl. Braga No. 10', '001/002',
+   'Braga', 'Sumur Bandung', 'Kota Bandung', 'Jawa Barat', '40115',
+   -6.9166, 107.6083, TRUE, CURRENT_TIMESTAMP()),
+  ('ADR0000003', 'CMP0000003', 'DOMICILE', 'Jl. Genteng Besar No. 8', '002/003',
+   'Genteng', 'Genteng', 'Kota Surabaya', 'Jawa Timur', '60271',
+   -7.2604, 112.7385, TRUE, CURRENT_TIMESTAMP()),
+  ('ADR0000004', 'CMP0000004', 'REGISTERED', 'Jl. Petisah Raya No. 15', '003/004',
+   'Petisah Tengah', 'Medan Petisah', 'Kota Medan', 'Sumatera Utara', '20111',
+   3.5952, 98.6722, TRUE, CURRENT_TIMESTAMP());
+
+-- 5. COMP_GROUP
+INSERT INTO `your_project.lov_gold.comp_group`
+  (group_id, comp_id, parent_comp_id, group_name, relationship_type, ownership_level, gold_load_ts)
+VALUES
+  ('GRP0000001', 'CMP0000002', 'CMP0000001', 'Nusantara Group', 'SUBSIDIARY', 1, CURRENT_TIMESTAMP()),
+  ('GRP0000002', 'CMP0000003', 'CMP0000001', 'Nusantara Group', 'AFFILIATE',  1, CURRENT_TIMESTAMP()),
+  ('GRP0000003', 'CMP0000001', NULL,          'Nusantara Group', 'HOLDING',   0, CURRENT_TIMESTAMP());
+
+-- 6. COMP_SHRLDR
+INSERT INTO `your_project.lov_gold.comp_shrldr`
+  (shrldr_id, comp_id, shareholder_name, shareholder_type, identity_no, ownership_pct, shares_count, gold_load_ts)
+VALUES
+  ('SHR0000001', 'CMP0000001', 'Budi Santoso',         'INDIVIDUAL', '3171234567890001', 60.00, 6000000, CURRENT_TIMESTAMP()),
+  ('SHR0000002', 'CMP0000001', 'Siti Rahayu',          'INDIVIDUAL', '3171234567890002', 40.00, 4000000, CURRENT_TIMESTAMP()),
+  ('SHR0000003', 'CMP0000002', 'PT Nusantara Digital Sejahtera', 'CORPORATE', '01.234.567.8-901.000', 75.00, 7500000, CURRENT_TIMESTAMP()),
+  ('SHR0000004', 'CMP0000003', 'Ahmad Fauzi',          'INDIVIDUAL', '3273456789010003', 100.00, 1000000, CURRENT_TIMESTAMP());
+
+-- 7. COMP_CONT
+INSERT INTO `your_project.lov_gold.comp_cont`
+  (cont_id, comp_id, contact_type, contact_value, pic_name, is_primary, gold_load_ts)
+VALUES
+  ('CNT0000001', 'CMP0000001', 'EMAIL', 'info@nds.co.id',        NULL,           TRUE,  CURRENT_TIMESTAMP()),
+  ('CNT0000002', 'CMP0000001', 'PHONE', '+62-21-5551234',        NULL,           FALSE, CURRENT_TIMESTAMP()),
+  ('CNT0000003', 'CMP0000001', 'PIC',   '+62-812-3456-7890',     'Rina Wijaya',  FALSE, CURRENT_TIMESTAMP()),
+  ('CNT0000004', 'CMP0000002', 'EMAIL', 'contact@mlu.co.id',     NULL,           TRUE,  CURRENT_TIMESTAMP()),
+  ('CNT0000005', 'CMP0000003', 'EMAIL', 'admin@bka.co.id',       NULL,           TRUE,  CURRENT_TIMESTAMP()),
+  ('CNT0000006', 'CMP0000004', 'EMAIL', 'cs@sfi.co.id',          NULL,           TRUE,  CURRENT_TIMESTAMP());
+
+
+-- =====================================================================
+-- Quick sanity checks
+-- =====================================================================
+-- SELECT table_name, row_count
+-- FROM `your_project.lov_gold.__TABLES__`;
+
+-- SELECT c.comp_name, a.address_line, a.kabupaten_kota
+-- FROM `your_project.lov_gold.comp` c
+-- JOIN `your_project.lov_gold.comp_addr` a USING (comp_id)
+-- WHERE a.is_primary = TRUE;

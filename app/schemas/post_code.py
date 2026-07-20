@@ -1,17 +1,12 @@
-from datetime import date
+from datetime import datetime
 
 from pydantic import BaseModel
 
 
 class PostCodeRead(BaseModel):
-    kode_pos: str
-    kode_kemendagri: str
-    kode_dati: str
-    kelurahan: str
-    kecamatan: str
-    kota_kabupaten: str
-    provinsi: str
-    create_date: date
-    create_by: str
-    update_date: date
-    update_by: str
+    postal_code: str
+    kelurahan: str | None = None
+    kecamatan: str | None = None
+    kabupaten_kota: str | None = None
+    provinsi: str | None = None
+    gold_load_ts: datetime

@@ -1,12 +1,13 @@
-from datetime import date
+from datetime import datetime
 
 from pydantic import BaseModel
 
 
 class GroupRead(BaseModel):
-    group_code: str
-    group_name: str
-    create_date: date
-    create_by: str
-    update_date: date
-    update_by: str
+    group_id: str
+    comp_id: str
+    parent_comp_id: str | None = None
+    group_name: str | None = None
+    relationship_type: str | None = None
+    ownership_level: int | None = None
+    gold_load_ts: datetime

@@ -1,27 +1,28 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.group import GroupRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all group data")
-async def get_all_group(db: AsyncSession = Depends(get_db)) -> list[GroupRead]:
+async def get_all_group(client: bigquery.Client = Depends(get_db)) -> list[GroupRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
-            group_code,
+            group_id,
+            comp_id,
+            parent_comp_id,
             group_name,
-            create_date,
-            create_by,
-            update_date,
-            update_by
-        FROM gold_group
-        ORDER BY group_code
+            relationship_type,
+            ownership_level,
+            gold_load_ts
+        FROM {qualified_table("comp_group")}
+        ORDER BY group_name, comp_id
         """,
         GroupRead,
     )

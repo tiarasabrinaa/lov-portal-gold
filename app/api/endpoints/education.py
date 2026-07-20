@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.education import EducationRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all education data")
-async def get_all_education(db: AsyncSession = Depends(get_db)) -> list[EducationRead]:
+async def get_all_education(client: bigquery.Client = Depends(get_db)) -> list[EducationRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
             master_code,
             source_system,
@@ -22,17 +22,20 @@ async def get_all_education(db: AsyncSession = Depends(get_db)) -> list[Educatio
             create_by,
             update_date,
             update_by
-        FROM gold_education
+        FROM {qualified_table("education")}
         ORDER BY master_code
         """,
         EducationRead,
     )
 
+
 @router.get("/{master_code}", summary="Get education data by master code")
-async def get_education_by_master_code(master_code: str, db: AsyncSession = Depends(get_db)) -> list[EducationRead]:
+async def get_education_by_master_code(
+    master_code: str, client: bigquery.Client = Depends(get_db)
+) -> list[EducationRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
             master_code,
             source_system,
@@ -42,10 +45,10 @@ async def get_education_by_master_code(master_code: str, db: AsyncSession = Depe
             create_by,
             update_date,
             update_by
-        FROM gold_education
-        WHERE master_code = :master_code
+        FROM {qualified_table("education")}
+        WHERE master_code = @master_code
         ORDER BY master_code
         """,
         EducationRead,
-        {"master_code": master_code},
-    ) 
+        [bigquery.ScalarQueryParameter("master_code", "STRING", master_code)],
+    )

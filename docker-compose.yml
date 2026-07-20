@@ -4,8 +4,12 @@ services:
     container_name: lov-portal-api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
     environment:
-      DATABASE_URL: postgresql+asyncpg://tiarasabrina@host.docker.internal:5432/gold_lov-portal-cimb
+      BIGQUERY_PROJECT: sandbox-lov
+      BIGQUERY_DATASET: lov_gold
+      BIGQUERY_LOCATION: asia-southeast2
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sandbox-lov-760ab321486a.json
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
+      - ./secrets/sandbox-lov-760ab321486a.json:/secrets/sandbox-lov-760ab321486a.json:ro

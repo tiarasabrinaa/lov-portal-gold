@@ -1,32 +1,27 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
-from app.core.database import get_db
+from app.core.database import get_db, qualified_table
 from app.schemas.post_code import PostCodeRead
 
 router = APIRouter()
 
 
 @router.get("/", summary="Get all post code data")
-async def get_all_post_code(db: AsyncSession = Depends(get_db)) -> list[PostCodeRead]:
+async def get_all_post_code(client: bigquery.Client = Depends(get_db)) -> list[PostCodeRead]:
     return await fetch_all(
-        db,
-        """
+        client,
+        f"""
         SELECT
-            kode_pos,
-            kode_kemendagri,
-            kode_dati,
+            postal_code,
             kelurahan,
             kecamatan,
-            kota_kabupaten,
+            kabupaten_kota,
             provinsi,
-            create_date,
-            create_by,
-            update_date,
-            update_by
-        FROM gold_post_code
-        ORDER BY kode_pos
+            gold_load_ts
+        FROM {qualified_table("postcode")}
+        ORDER BY postal_code
         """,
         PostCodeRead,
     )

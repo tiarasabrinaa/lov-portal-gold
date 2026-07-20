@@ -14,6 +14,7 @@ async def get_all_education(client: bigquery.Client = Depends(get_db)) -> list[E
         client,
         f"""
         SELECT
+            education_id,
             master_code,
             source_system,
             original_code,
@@ -37,6 +38,7 @@ async def get_education_by_master_code(
         client,
         f"""
         SELECT
+            education_id,
             master_code,
             source_system,
             original_code,

@@ -14,6 +14,7 @@ async def get_all_job_title(client: bigquery.Client = Depends(get_db)) -> list[J
         client,
         f"""
         SELECT
+            job_title_id,
             master_code,
             source_system,
             original_code,

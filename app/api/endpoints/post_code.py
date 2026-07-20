@@ -14,14 +14,24 @@ async def get_all_post_code(client: bigquery.Client = Depends(get_db)) -> list[P
         client,
         f"""
         SELECT
-            postal_code,
-            kelurahan,
-            kecamatan,
-            kabupaten_kota,
-            provinsi,
-            gold_load_ts
+            post_code_id,
+            kode_pos,
+            kode_kemendagri,
+            kode_dati,
+            address_detail,
+            subdistrict,
+            district,
+            city,
+            province,
+            val_kemendagri,
+            val_pos,
+            flag,
+            create_date,
+            create_by,
+            update_date,
+            update_by
         FROM {qualified_table("postcode")}
-        ORDER BY postal_code
+        ORDER BY kode_pos
         """,
         PostCodeRead,
     )

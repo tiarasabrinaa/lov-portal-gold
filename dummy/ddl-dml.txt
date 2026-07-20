@@ -1,257 +1,576 @@
--- =====================================================================
--- LOV GOLD LAYER — Dummy DDL & DML (BigQuery)
+-- ============================================================
+-- lov_gold LAYER - EMPLOYER DOMAIN (BigQuery Standard SQL)
 -- Dataset: lov_gold
--- Purpose: sandbox / demo schema for LoV Portal Gold-layer company
---          master data (COMP, COMP_ADDR, COMP_GROUP, COMP_SHRLDR,
---          COMP_CONT, KBLI_IDX, POSTCODE)
--- Note: Gold layer is presented as current-state (no SCD2 here —
---       SCD2 history lives in Silver, per your architecture decision).
--- =====================================================================
+--
+-- Struktur:
+--   lov_gold.employer              -> tabel utama (wide/flat), 1 row per employer
+--   lov_gold.employer_address      -> semua address (termasuk primary), flag is_primary
+--   lov_gold.employer_contact      -> semua contact (termasuk primary), flag is_primary
+--   lov_gold.employer_account      -> semua account per employer
+--   lov_gold.employer_shareholder  -> semua shareholder per employer
+--
+-- Catatan: BigQuery PK/FK constraint sifatnya NOT ENFORCED
+-- (cuma metadata utk query optimizer & dokumentasi lineage,
+--  gak ada validasi otomatis kayak RDBMS biasa). Makanya urutan
+--  insert di bawah tetap dijaga manual: employer dulu, baru child table.
+-- ============================================================
 
--- Replace `your_project` with your actual GCP project id before running,
--- or drop the project prefix entirely if you run this with a default
--- project already set in your BigQuery session.
 
-CREATE SCHEMA IF NOT EXISTS `your_project.lov_gold`
-OPTIONS (
-  location = 'asia-southeast2', -- Jakarta region
-  description = 'Gold layer: curated LoV (List of Values) company master data',
-  -- Not required anymore now that billing is enabled (this was the
-  -- sandbox-mode requirement), but kept here as good hygiene since
-  -- this is dummy/testing data — tables auto-expire instead of
-  -- lingering and quietly costing storage.
-  -- Set to NULL (remove these two lines) if you want this to become
-  -- permanent/production data with no auto-expiry.
-  default_table_expiration_days = 30,
-  default_partition_expiration_days = 30
+-- ============================================================
+-- SET EXPIRATION - buat tabel lov_gold (jaga-jaga kalau lupa didrop manual)
+-- Set expired 7 hari dari sekarang, tinggal ganti INTERVAL sesuai kebutuhan
+-- ============================================================
+ALTER TABLE `lov_gold.employer`             SET OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 7 DAY));
+ALTER TABLE `lov_gold.employer_address`     SET OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 7 DAY));
+ALTER TABLE `lov_gold.employer_contact`     SET OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 7 DAY));
+ALTER TABLE `lov_gold.employer_account`     SET OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 7 DAY));
+ALTER TABLE `lov_gold.employer_shareholder` SET OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 7 DAY));
+
+-- ========================================
+
+-- ------------------------------------------------------------
+-- 1. lov_gold.employer (tabel utama)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.employer` (
+  employer_id                  STRING  NOT NULL,
+  group_id                     STRING,
+  nob_id                       STRING,
+  cif                          STRING  NOT NULL,
+  stock_code                   STRING,
+  employer_name                STRING  NOT NULL,
+  ipo_date                     DATE,
+  is_top_1000                  BOOL,
+  is_pks                       BOOL,
+  tier                         STRING,
+  group_name                   STRING,
+  cl_account                   STRING,
+  cl_loan_type                 STRING,
+  primary_address_detail       STRING,
+  primary_address_subdistrict  STRING,
+  primary_address_district     STRING,
+  primary_address_city         STRING,
+  primary_address_province     STRING,
+  primary_address_postcode     STRING,
+  primary_contact              STRING,
+  shareholder_count            INT64,
+  top_shareholder_name         STRING,
+  top_shareholder_pct          NUMERIC,
+  account_count                INT64,
+  primary_account_number       STRING,
+  snapshot_date                DATE    NOT NULL,
+  PRIMARY KEY (employer_id) NOT ENFORCED
 );
 
--- =====================================================================
--- 1. COMP — Company master
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.comp` (
-  comp_id           STRING       NOT NULL OPTIONS(description = 'Unique company identifier (surrogate key)'),
-  comp_code         STRING       OPTIONS(description = 'Business/source company code'),
-  comp_name         STRING       NOT NULL,
-  comp_short_name   STRING,
-  comp_type         STRING       OPTIONS(description = 'e.g. PT, CV, FIRMA, KOPERASI'),
-  npwp              STRING       OPTIONS(description = 'Tax ID, 15/16 digit'),
-  nib               STRING       OPTIONS(description = 'Nomor Induk Berusaha'),
-  kbli_code         STRING       OPTIONS(description = 'FK to kbli_idx.kbli_code'),
-  industry_sector   STRING,
-  incorporation_date DATE,
-  comp_status       STRING       OPTIONS(description = 'ACTIVE, INACTIVE, DISSOLVED'),
-  source_system     STRING       OPTIONS(description = 'e.g. MADAM, AHU, MANUAL'),
-  gold_load_ts      TIMESTAMP    NOT NULL OPTIONS(description = 'ETL load timestamp into Gold')
-)
-CLUSTER BY comp_id
-OPTIONS (
-  description = 'Gold: current-state company master (one row per company)'
+-- ------------------------------------------------------------
+-- 2. lov_gold.employer_address (all address, ada is_primary)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.employer_address` (
+  address_id      STRING  NOT NULL,
+  employer_id     STRING  NOT NULL,
+  address_type    STRING,
+  address_detail  STRING,
+  subdistrict     STRING,
+  district        STRING,
+  city            STRING,
+  province        STRING,
+  postcode        STRING,
+  is_primary      BOOL,
+  is_current      BOOL,
+  effective_date  DATE,
+  expiry_date     DATE,
+  PRIMARY KEY (address_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.employer`(employer_id) NOT ENFORCED
 );
 
--- =====================================================================
--- 2. COMP_ADDR — Company address
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.comp_addr` (
-  addr_id           STRING       NOT NULL,
-  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
-  addr_type         STRING       OPTIONS(description = 'REGISTERED, DOMICILE, BRANCH, MAILING'),
-  address_line      STRING,
-  rt_rw             STRING,
-  kelurahan         STRING,
-  kecamatan         STRING,
-  kabupaten_kota    STRING,
-  provinsi          STRING,
-  postal_code       STRING       OPTIONS(description = 'FK to postcode.postal_code'),
-  latitude          FLOAT64,
-  longitude         FLOAT64,
-  is_primary        BOOL,
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY comp_id
-OPTIONS (
-  description = 'Gold: current company addresses, one-to-many with comp'
+-- ------------------------------------------------------------
+-- 3. lov_gold.employer_contact (all contact, ada is_primary)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.employer_contact` (
+  contact_id     STRING  NOT NULL,
+  employer_id    STRING  NOT NULL,
+  contact_type   STRING,
+  contact_value  STRING,
+  is_primary     BOOL,
+  snapshot_date  DATE,
+  PRIMARY KEY (contact_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.employer`(employer_id) NOT ENFORCED
 );
 
--- =====================================================================
--- 3. COMP_GROUP — Corporate group / holding structure
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.comp_group` (
-  group_id          STRING       NOT NULL,
-  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id (member company)'),
-  parent_comp_id    STRING       OPTIONS(description = 'FK to comp.comp_id (holding/parent company)'),
-  group_name        STRING,
-  relationship_type STRING       OPTIONS(description = 'SUBSIDIARY, AFFILIATE, HOLDING'),
-  ownership_level   INT64        OPTIONS(description = 'Depth in group hierarchy'),
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY comp_id
-OPTIONS (
-  description = 'Gold: corporate group / ownership hierarchy'
+-- ------------------------------------------------------------
+-- 4. lov_gold.employer_account
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.employer_account` (
+  account_id      STRING  NOT NULL,
+  employer_id     STRING  NOT NULL,
+  account_number  STRING,
+  account_type    STRING,
+  snapshot_date   DATE,
+  PRIMARY KEY (account_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.employer`(employer_id) NOT ENFORCED
 );
 
--- =====================================================================
--- 4. COMP_SHRLDR — Shareholders
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.comp_shrldr` (
-  shrldr_id         STRING       NOT NULL,
-  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
-  shareholder_name  STRING       NOT NULL,
-  shareholder_type  STRING       OPTIONS(description = 'INDIVIDUAL, CORPORATE, GOVERNMENT'),
-  identity_no       STRING       OPTIONS(description = 'KTP or corporate NPWP'),
-  ownership_pct     NUMERIC(5,2) OPTIONS(description = 'Ownership percentage, 0-100'),
-  shares_count      INT64,
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY comp_id
-OPTIONS (
-  description = 'Gold: shareholder composition per company'
-);
-
--- =====================================================================
--- 5. COMP_CONT — Company contact points
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.comp_cont` (
-  cont_id           STRING       NOT NULL,
-  comp_id           STRING       NOT NULL OPTIONS(description = 'FK to comp.comp_id'),
-  contact_type      STRING       OPTIONS(description = 'PHONE, EMAIL, FAX, WEBSITE, PIC'),
-  contact_value     STRING,
-  pic_name          STRING       OPTIONS(description = 'Person in charge, if contact_type = PIC'),
-  is_primary        BOOL,
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY comp_id
-OPTIONS (
-  description = 'Gold: company contact points'
-);
-
--- =====================================================================
--- 6. KBLI_IDX — KBLI (Indonesian Standard Industrial Classification) index
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.kbli_idx` (
-  kbli_code         STRING       NOT NULL,
-  kbli_desc         STRING       NOT NULL,
-  kbli_category     STRING       OPTIONS(description = 'e.g. A, B, C section code'),
-  kbli_category_desc STRING,
-  risk_level        STRING       OPTIONS(description = 'LOW, MEDIUM, HIGH per OSS-RBA'),
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY kbli_code
-OPTIONS (
-  description = 'Gold: KBLI reference / lookup table'
-);
-
--- =====================================================================
--- 7. POSTCODE — Wilayah / postal code reference
--- =====================================================================
-CREATE OR REPLACE TABLE `your_project.lov_gold.postcode` (
-  postal_code       STRING       NOT NULL,
-  kelurahan         STRING,
-  kecamatan         STRING,
-  kabupaten_kota    STRING,
-  provinsi          STRING,
-  gold_load_ts      TIMESTAMP    NOT NULL
-)
-CLUSTER BY postal_code
-OPTIONS (
-  description = 'Gold: wilayah / postal code reference (used for address matching)'
+-- ------------------------------------------------------------
+-- 5. lov_gold.employer_shareholder
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.employer_shareholder` (
+  shareholder_id          STRING  NOT NULL,
+  employer_id             STRING  NOT NULL,
+  shareholder_name        STRING,
+  shareholder_amount      NUMERIC,
+  shareholder_percentage  NUMERIC,
+  shareholder_type        STRING,
+  snapshot_date           DATE,
+  PRIMARY KEY (shareholder_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.employer`(employer_id) NOT ENFORCED
 );
 
 
--- =====================================================================
--- DML — Dummy data inserts
--- =====================================================================
+-- ============================================================
+-- DML - SAMPLE DATA
+-- 5 employer, dengan child rows yang konsisten (termasuk
+-- contoh 1-to-many: EMP001 punya 2 address & 2 account,
+-- shareholder emang natural-nya banyak per employer)
+-- ============================================================
 
--- 1. POSTCODE (load first, referenced by comp_addr)
-INSERT INTO `your_project.lov_gold.postcode`
-  (postal_code, kelurahan, kecamatan, kabupaten_kota, provinsi, gold_load_ts)
+-- 1. lov_gold.employer
+INSERT INTO `lov_gold.employer`
+(employer_id, group_id, nob_id, cif, stock_code, employer_name, ipo_date,
+ is_top_1000, is_pks, tier, group_name, cl_account, cl_loan_type,
+ primary_address_detail, primary_address_subdistrict, primary_address_district,
+ primary_address_city, primary_address_province, primary_address_postcode,
+ primary_contact, shareholder_count, top_shareholder_name, top_shareholder_pct,
+ account_count, primary_account_number, snapshot_date)
 VALUES
-  ('12190', 'Senayan',        'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', CURRENT_TIMESTAMP()),
-  ('40115', 'Braga',          'Sumur Bandung',  'Kota Bandung',    'Jawa Barat',  CURRENT_TIMESTAMP()),
-  ('60271', 'Genteng',        'Genteng',        'Kota Surabaya',   'Jawa Timur',  CURRENT_TIMESTAMP()),
-  ('20111', 'Petisah Tengah', 'Medan Petisah',  'Kota Medan',      'Sumatera Utara', CURRENT_TIMESTAMP());
+('EMP001', 'GRP001', 'NOB01', '1000000001', 'SNRA', 'PT Sinar Abadi Sejahtera Tbk', DATE '2015-06-10',
+ TRUE, FALSE, 'lov_gold', 'Sinar Group', 'CL-001', 'Working Capital',
+ 'Jl. Sudirman No. 10', 'Karet', 'Setiabudi',
+ 'Jakarta Selatan', 'DKI Jakarta', '12930',
+ '021-5551234', 2, 'Budi Santoso', 55.00,
+ 2, '1234567890', DATE '2026-07-01'),
 
--- 2. KBLI_IDX
-INSERT INTO `your_project.lov_gold.kbli_idx`
-  (kbli_code, kbli_desc, kbli_category, kbli_category_desc, risk_level, gold_load_ts)
+('EMP002', 'GRP002', 'NOB02', '1000000002', NULL, 'PT Maju Jaya Makmur', NULL,
+ FALSE, TRUE, 'SILVER', 'Maju Group', 'CL-002', 'Investment',
+ 'Jl. Basuki Rahmat No. 88', 'Embong Kaliasin', 'Genteng',
+ 'Surabaya', 'Jawa Timur', '60271',
+ '031-5559876', 2, 'Siti Aminah', 60.00,
+ 1, '2234567890', DATE '2026-07-01'),
+
+('EMP003', 'GRP003', 'NOB01', '1000000003', 'CHYN', 'PT Cahaya Nusantara Tbk', DATE '2019-03-15',
+ TRUE, FALSE, 'lov_gold', 'Cahaya Group', 'CL-003', 'Working Capital',
+ 'Jl. Asia Afrika No. 45', 'Braga', 'Sumur Bandung',
+ 'Bandung', 'Jawa Barat', '40111',
+ 'cs@cahayanusantara.co.id', 1, 'PT Cahaya Investama', 100.00,
+ 1, '3234567890', DATE '2026-07-01'),
+
+('EMP004', 'GRP004', 'NOB03', '1000000004', NULL, 'PT Bumi Perkasa Mandiri', NULL,
+ FALSE, FALSE, 'SILVER', 'Bumi Group', 'CL-004', 'Trade Finance',
+ 'Jl. Gatot Subroto No. 12', 'Petisah Tengah', 'Medan Petisah',
+ 'Medan', 'Sumatera Utara', '20112',
+ '061-5552468', 2, 'Ahmad Hidayat', 70.00,
+ 1, '4234567890', DATE '2026-07-01'),
+
+('EMP005', 'GRP005', 'NOB02', '1000000005', NULL, 'PT Karya Utama Sentosa', NULL,
+ FALSE, TRUE, 'BRONZE', 'Karya Group', 'CL-005', 'Working Capital',
+ 'Jl. Pandanaran No. 30', 'Pekunden', 'Semarang Tengah',
+ 'Semarang', 'Jawa Tengah', '50134',
+ '024-5553579', 1, 'PT Karya Investasi', 100.00,
+ 1, '5234567890', DATE '2026-07-01');
+
+
+-- 2. lov_gold.employer_address (6 rows — EMP001 punya HO + cabang)
+INSERT INTO `lov_gold.employer_address`
+(address_id, employer_id, address_type, address_detail, subdistrict, district,
+ city, province, postcode, is_primary, is_current, effective_date, expiry_date)
 VALUES
-  ('64190', 'Aktivitas Perantara Moneter Lainnya', 'K', 'Jasa Keuangan dan Asuransi', 'HIGH',   CURRENT_TIMESTAMP()),
-  ('62010', 'Aktivitas Pemrograman Komputer',      'J', 'Informasi dan Komunikasi',    'LOW',    CURRENT_TIMESTAMP()),
-  ('46900', 'Perdagangan Besar Berbagai Macam Barang', 'G', 'Perdagangan Besar dan Eceran', 'MEDIUM', CURRENT_TIMESTAMP()),
-  ('41011', 'Konstruksi Gedung Perkantoran',       'F', 'Konstruksi',                   'MEDIUM', CURRENT_TIMESTAMP());
+('AD001', 'EMP001', 'HO',     'Jl. Sudirman No. 10',      'Karet',           'Setiabudi',       'Jakarta Selatan', 'DKI Jakarta',     '12930', TRUE,  TRUE, DATE '2015-01-01', NULL),
+('AD002', 'EMP001', 'CABANG', 'Jl. Thamrin No. 5',         'Kebon Melati',    'Tanah Abang',     'Jakarta Pusat',    'DKI Jakarta',     '10230', FALSE, TRUE, DATE '2018-01-01', NULL),
+('AD003', 'EMP002', 'HO',     'Jl. Basuki Rahmat No. 88',  'Embong Kaliasin', 'Genteng',         'Surabaya',         'Jawa Timur',      '60271', TRUE,  TRUE, DATE '2012-01-01', NULL),
+('AD004', 'EMP003', 'HO',     'Jl. Asia Afrika No. 45',    'Braga',           'Sumur Bandung',   'Bandung',          'Jawa Barat',      '40111', TRUE,  TRUE, DATE '2019-03-15', NULL),
+('AD005', 'EMP004', 'HO',     'Jl. Gatot Subroto No. 12',  'Petisah Tengah',  'Medan Petisah',   'Medan',            'Sumatera Utara',  '20112', TRUE,  TRUE, DATE '2010-01-01', NULL),
+('AD006', 'EMP005', 'HO',     'Jl. Pandanaran No. 30',     'Pekunden',        'Semarang Tengah', 'Semarang',         'Jawa Tengah',     '50134', TRUE,  TRUE, DATE '2016-01-01', NULL);
 
--- 3. COMP
-INSERT INTO `your_project.lov_gold.comp`
-  (comp_id, comp_code, comp_name, comp_short_name, comp_type, npwp, nib, kbli_code,
-   industry_sector, incorporation_date, comp_status, source_system, gold_load_ts)
+
+-- 3. lov_gold.employer_contact (5 rows, 1 primary per employer)
+INSERT INTO `lov_gold.employer_contact`
+(contact_id, employer_id, contact_type, contact_value, is_primary, snapshot_date)
 VALUES
-  ('CMP0000001', 'C-0001', 'PT Nusantara Digital Sejahtera', 'NDS', 'PT',
-   '01.234.567.8-901.000', '9120000012345', '62010', 'Technology',
-   DATE '2015-03-12', 'ACTIVE', 'MADAM', CURRENT_TIMESTAMP()),
-  ('CMP0000002', 'C-0002', 'PT Mitra Logistik Utama', 'MLU', 'PT',
-   '02.345.678.9-012.000', '9120000023456', '46900', 'Trading',
-   DATE '2010-07-01', 'ACTIVE', 'MADAM', CURRENT_TIMESTAMP()),
-  ('CMP0000003', 'C-0003', 'CV Bangun Karya Abadi', 'BKA', 'CV',
-   '03.456.789.0-123.000', '9120000034567', '41011', 'Construction',
-   DATE '2018-11-20', 'ACTIVE', 'AHU', CURRENT_TIMESTAMP()),
-  ('CMP0000004', 'C-0004', 'PT Sumber Finansial Indonesia', 'SFI', 'PT',
-   '04.567.890.1-234.000', '9120000045678', '64190', 'Financial Services',
-   DATE '2005-01-15', 'INACTIVE', 'MADAM', CURRENT_TIMESTAMP());
+('CT001', 'EMP001', 'PHONE', '021-5551234',              TRUE, DATE '2026-07-01'),
+('CT002', 'EMP002', 'PHONE', '031-5559876',               TRUE, DATE '2026-07-01'),
+('CT003', 'EMP003', 'EMAIL', 'cs@cahayanusantara.co.id',  TRUE, DATE '2026-07-01'),
+('CT004', 'EMP004', 'PHONE', '061-5552468',                TRUE, DATE '2026-07-01'),
+('CT005', 'EMP005', 'PHONE', '024-5553579',                TRUE, DATE '2026-07-01');
 
--- 4. COMP_ADDR
-INSERT INTO `your_project.lov_gold.comp_addr`
-  (addr_id, comp_id, addr_type, address_line, rt_rw, kelurahan, kecamatan,
-   kabupaten_kota, provinsi, postal_code, latitude, longitude, is_primary, gold_load_ts)
+
+-- 4. lov_gold.employer_account (6 rows — EMP001 punya 2 account)
+INSERT INTO `lov_gold.employer_account`
+(account_id, employer_id, account_number, account_type, snapshot_date)
 VALUES
-  ('ADR0000001', 'CMP0000001', 'REGISTERED', 'Jl. Jenderal Sudirman Kav. 25', '004/005',
-   'Senayan', 'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', '12190',
-   -6.2241, 106.8022, TRUE, CURRENT_TIMESTAMP()),
-  ('ADR0000002', 'CMP0000002', 'REGISTERED', 'Jl. Braga No. 10', '001/002',
-   'Braga', 'Sumur Bandung', 'Kota Bandung', 'Jawa Barat', '40115',
-   -6.9166, 107.6083, TRUE, CURRENT_TIMESTAMP()),
-  ('ADR0000003', 'CMP0000003', 'DOMICILE', 'Jl. Genteng Besar No. 8', '002/003',
-   'Genteng', 'Genteng', 'Kota Surabaya', 'Jawa Timur', '60271',
-   -7.2604, 112.7385, TRUE, CURRENT_TIMESTAMP()),
-  ('ADR0000004', 'CMP0000004', 'REGISTERED', 'Jl. Petisah Raya No. 15', '003/004',
-   'Petisah Tengah', 'Medan Petisah', 'Kota Medan', 'Sumatera Utara', '20111',
-   3.5952, 98.6722, TRUE, CURRENT_TIMESTAMP());
+('ACC001', 'EMP001', '1234567890', 'GIRO',     DATE '2026-07-01'),
+('ACC002', 'EMP001', '1234567891', 'DEPOSITO', DATE '2026-07-01'),
+('ACC003', 'EMP002', '2234567890', 'GIRO',     DATE '2026-07-01'),
+('ACC004', 'EMP003', '3234567890', 'GIRO',     DATE '2026-07-01'),
+('ACC005', 'EMP004', '4234567890', 'GIRO',     DATE '2026-07-01'),
+('ACC006', 'EMP005', '5234567890', 'GIRO',     DATE '2026-07-01');
 
--- 5. COMP_GROUP
-INSERT INTO `your_project.lov_gold.comp_group`
-  (group_id, comp_id, parent_comp_id, group_name, relationship_type, ownership_level, gold_load_ts)
+
+-- 5. lov_gold.employer_shareholder (8 rows, beberapa employer punya >1 shareholder)
+INSERT INTO `lov_gold.employer_shareholder`
+(shareholder_id, employer_id, shareholder_name, shareholder_amount, shareholder_percentage, shareholder_type, snapshot_date)
 VALUES
-  ('GRP0000001', 'CMP0000002', 'CMP0000001', 'Nusantara Group', 'SUBSIDIARY', 1, CURRENT_TIMESTAMP()),
-  ('GRP0000002', 'CMP0000003', 'CMP0000001', 'Nusantara Group', 'AFFILIATE',  1, CURRENT_TIMESTAMP()),
-  ('GRP0000003', 'CMP0000001', NULL,          'Nusantara Group', 'HOLDING',   0, CURRENT_TIMESTAMP());
+('SH001', 'EMP001', 'Budi Santoso',          550000000000, 55.00, 'Individual', DATE '2026-07-01'),
+('SH002', 'EMP001', 'PT Modal Investama',    450000000000, 45.00, 'Corporate',  DATE '2026-07-01'),
+('SH003', 'EMP002', 'Siti Aminah',           300000000000, 60.00, 'Individual', DATE '2026-07-01'),
+('SH004', 'EMP002', 'PT Investasi Makmur',   200000000000, 40.00, 'Corporate',  DATE '2026-07-01'),
+('SH005', 'EMP003', 'PT Cahaya Investama',   800000000000, 100.00,'Corporate',  DATE '2026-07-01'),
+('SH006', 'EMP004', 'Ahmad Hidayat',         350000000000, 70.00, 'Individual', DATE '2026-07-01'),
+('SH007', 'EMP004', 'Dewi Lestari',          150000000000, 30.00, 'Individual', DATE '2026-07-01'),
+('SH008', 'EMP005', 'PT Karya Investasi',    600000000000, 100.00,'Corporate',  DATE '2026-07-01');
 
--- 6. COMP_SHRLDR
-INSERT INTO `your_project.lov_gold.comp_shrldr`
-  (shrldr_id, comp_id, shareholder_name, shareholder_type, identity_no, ownership_pct, shares_count, gold_load_ts)
+
+-- ============================================================
+-- VERIFIKASI - pastiin FK "jalan" (BigQuery gak enforce FK,
+-- jadi validnya dicek manual pakai query, bukan pas insert)
+-- ============================================================
+
+-- 1. Cek ada child row yang employer_id-nya orphan (harusnya 0 row)
+SELECT 'employer_address' AS tabel, a.employer_id
+FROM `lov_gold.employer_address` a
+LEFT JOIN `lov_gold.employer` e ON a.employer_id = e.employer_id
+WHERE e.employer_id IS NULL
+UNION ALL
+SELECT 'employer_contact', c.employer_id
+FROM `lov_gold.employer_contact` c
+LEFT JOIN `lov_gold.employer` e ON c.employer_id = e.employer_id
+WHERE e.employer_id IS NULL
+UNION ALL
+SELECT 'employer_account', acc.employer_id
+FROM `lov_gold.employer_account` acc
+LEFT JOIN `lov_gold.employer` e ON acc.employer_id = e.employer_id
+WHERE e.employer_id IS NULL
+UNION ALL
+SELECT 'employer_shareholder', s.employer_id
+FROM `lov_gold.employer_shareholder` s
+LEFT JOIN `lov_gold.employer` e ON s.employer_id = e.employer_id
+WHERE e.employer_id IS NULL;
+
+-- 2. Cek shareholder_count & account_count di lov_gold.employer
+--    match sama jumlah row aktual di child table
+SELECT
+  e.employer_id,
+  e.shareholder_count AS shareholder_count_flat,
+  COUNT(s.shareholder_id) AS shareholder_count_actual,
+  e.account_count AS account_count_flat,
+  COUNT(DISTINCT acc.account_id) AS account_count_actual
+FROM `lov_gold.employer` e
+LEFT JOIN `lov_gold.employer_shareholder` s ON e.employer_id = s.employer_id
+LEFT JOIN `lov_gold.employer_account` acc ON e.employer_id = acc.employer_id
+GROUP BY e.employer_id, e.shareholder_count, e.account_count
+ORDER BY e.employer_id;
+
+-- 3. Contoh query "self-service" tanpa join sama sekali
+--    (ini yang mau dibuktiin ke SPV: cukup 1 tabel buat kasus umum)
+SELECT employer_name, tier, primary_address_city, primary_contact, top_shareholder_name
+FROM `lov_gold.employer`
+WHERE is_top_1000 = TRUE;
+
+-- 4. Contoh query drill-down (baru butuh join, buat kasus non-umum)
+SELECT e.employer_name, a.address_type, a.address_detail, a.city
+FROM `lov_gold.employer` e
+JOIN `lov_gold.employer_address` a ON e.employer_id = a.employer_id
+ORDER BY e.employer_id, a.is_primary DESC;
+
+
+-- RUN KEDUA
+
+-- ============================================================
+-- GOLD LAYER - TABEL REFERENSI / MASTER (BigQuery Standard SQL)
+-- Dataset: gold
+--
+-- Isinya: PostCode, NOB (Nature of Business), Religion, JobTitle,
+-- EmergencyContact, Education, Occupation.
+--
+-- Catatan penamaan: source diagram pakai camelCase (nobID,
+-- religionID, dst) & ada beberapa tabel dari 6 tabel di atas
+-- yang isinya cuma "master lookup" generik (masterCode,
+-- sourceSystem, originalCode, originalDescription). Di sini
+-- saya samain ke snake_case biar konsisten sama tabel gold
+-- yang udah dibikin sebelumnya (gold.employer, dst).
+--
+-- YANG SUDAH KE-LINK ke tabel existing (employer domain):
+--   - gold.nob        -> di-FK dari gold.employer.nob_id
+--   - gold.postcode   -> di-FK dari gold.employer_address (kolom baru postcode_id)
+--
+-- YANG BELUM ke-link (Religion, JobTitle, EmergencyContact,
+-- Education, Occupation): dari diagram, tabel-tabel ini
+-- kelihatannya atribut punya entitas "Individual/Party" yang
+-- belum ada di scope kita (bukan atribut EMPLOYER). Saya bikin
+-- DDL+DML standalone dulu, tinggal di-FK-in kalau tabel
+-- Individual/Party-nya udah di-share.
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+-- 1. gold.postcode
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.postcode` (
+  post_code_id      STRING  NOT NULL,
+  kode_pos          STRING,
+  kode_kemendagri   STRING,
+  kode_dati         STRING,
+  address_detail    STRING,
+  subdistrict       STRING,
+  district          STRING,
+  city              STRING,
+  province          STRING,
+  val_kemendagri    STRING,
+  val_pos           STRING,
+  flag              STRING,
+  create_date       TIMESTAMP,
+  create_by         STRING,
+  update_date       TIMESTAMP,
+  update_by         STRING,
+  PRIMARY KEY (post_code_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.postcode`
+(post_code_id, kode_pos, kode_kemendagri, kode_dati, address_detail, subdistrict, district, city, province, val_kemendagri, val_pos, flag, create_date, create_by, update_date, update_by)
 VALUES
-  ('SHR0000001', 'CMP0000001', 'Budi Santoso',         'INDIVIDUAL', '3171234567890001', 60.00, 6000000, CURRENT_TIMESTAMP()),
-  ('SHR0000002', 'CMP0000001', 'Siti Rahayu',          'INDIVIDUAL', '3171234567890002', 40.00, 4000000, CURRENT_TIMESTAMP()),
-  ('SHR0000003', 'CMP0000002', 'PT Nusantara Digital Sejahtera', 'CORPORATE', '01.234.567.8-901.000', 75.00, 7500000, CURRENT_TIMESTAMP()),
-  ('SHR0000004', 'CMP0000003', 'Ahmad Fauzi',          'INDIVIDUAL', '3273456789010003', 100.00, 1000000, CURRENT_TIMESTAMP());
+('PC001', '12930', '31.74.06.1001', '3174', 'Karet',          'Karet',          'Setiabudi',       'Jakarta Selatan', 'DKI Jakarta',    'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('PC002', '10230', '31.71.05.1002', '3171', 'Kebon Melati',   'Kebon Melati',   'Tanah Abang',     'Jakarta Pusat',    'DKI Jakarta',    'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('PC003', '60271', '35.78.03.1003', '3578', 'Embong Kaliasin','Embong Kaliasin','Genteng',         'Surabaya',         'Jawa Timur',     'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('PC004', '40111', '32.73.02.1004', '3273', 'Braga',          'Braga',          'Sumur Bandung',   'Bandung',          'Jawa Barat',     'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('PC005', '20112', '12.71.04.1005', '1271', 'Petisah Tengah', 'Petisah Tengah', 'Medan Petisah',   'Medan',            'Sumatera Utara', 'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('PC006', '50134', '33.74.01.1006', '3374', 'Pekunden',       'Pekunden',       'Semarang Tengah', 'Semarang',         'Jawa Tengah',    'VALID', 'VALID', 'ACTIVE', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
 
--- 7. COMP_CONT
-INSERT INTO `your_project.lov_gold.comp_cont`
-  (cont_id, comp_id, contact_type, contact_value, pic_name, is_primary, gold_load_ts)
+
+-- ------------------------------------------------------------
+-- 2. lov_gold.nob (Nature of Business) -> dipakai lov_gold.employer.nob_id
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.nob` (
+  nob_id                  STRING  NOT NULL,
+  master_code             STRING,
+  source_system           STRING,
+  original_code           STRING,
+  original_sector         STRING,
+  original_sub_sector     STRING,
+  original_industry       STRING,
+  original_sub_industry   STRING,
+  kbli                    STRING,
+  individual_type         STRING,
+  effective_date          DATE,
+  expiry_date             DATE,
+  is_current              BOOL,
+  create_date             TIMESTAMP,
+  create_by               STRING,
+  update_date             TIMESTAMP,
+  update_by               STRING,
+  PRIMARY KEY (nob_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.nob`
+(nob_id, master_code, source_system, original_code, original_sector, original_sub_sector, original_industry, original_sub_industry, kbli, individual_type, effective_date, expiry_date, is_current, create_date, create_by, update_date, update_by)
 VALUES
-  ('CNT0000001', 'CMP0000001', 'EMAIL', 'info@nds.co.id',        NULL,           TRUE,  CURRENT_TIMESTAMP()),
-  ('CNT0000002', 'CMP0000001', 'PHONE', '+62-21-5551234',        NULL,           FALSE, CURRENT_TIMESTAMP()),
-  ('CNT0000003', 'CMP0000001', 'PIC',   '+62-812-3456-7890',     'Rina Wijaya',  FALSE, CURRENT_TIMESTAMP()),
-  ('CNT0000004', 'CMP0000002', 'EMAIL', 'contact@mlu.co.id',     NULL,           TRUE,  CURRENT_TIMESTAMP()),
-  ('CNT0000005', 'CMP0000003', 'EMAIL', 'admin@bka.co.id',       NULL,           TRUE,  CURRENT_TIMESTAMP()),
-  ('CNT0000006', 'CMP0000004', 'EMAIL', 'cs@sfi.co.id',          NULL,           TRUE,  CURRENT_TIMESTAMP());
+('NOB01', 'NOB01', 'CORE_BANKING', '64190', 'Jasa Keuangan', 'Perbankan',           'Bank Umum',                     'Bank Devisa',              '64190', 'Badan Usaha', DATE '2020-01-01', NULL, TRUE, TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('NOB02', 'NOB02', 'CORE_BANKING', '46900', 'Perdagangan',   'Perdagangan Besar',   'Distribusi',                    'Distribusi Barang Konsumsi','46900', 'Badan Usaha', DATE '2020-01-01', NULL, TRUE, TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('NOB03', 'NOB03', 'CORE_BANKING', '41013', 'Konstruksi',    'Konstruksi Gedung',   'Konstruksi Bangunan Komersial', NULL,                       '41013', 'Badan Usaha', DATE '2020-01-01', NULL, TRUE, TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('NOB04', 'NOB04', 'CORE_BANKING', '10790', 'Manufaktur',    'Industri Makanan',    'Pengolahan Makanan',            'Makanan Olahan',           '10790', 'Badan Usaha', DATE '2020-01-01', NULL, TRUE, TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('NOB05', 'NOB05', 'CORE_BANKING', '01262', 'Pertanian',     'Perkebunan',          'Perkebunan Kelapa Sawit',       NULL,                       '01262', 'Badan Usaha', DATE '2020-01-01', NULL, TRUE, TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
 
 
--- =====================================================================
--- Quick sanity checks
--- =====================================================================
--- SELECT table_name, row_count
--- FROM `your_project.lov_gold.__TABLES__`;
+-- ------------------------------------------------------------
+-- 3. lov_gold.religion (standalone, belum ada tabel Individual/Party)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.religion` (
+  religion_id           STRING  NOT NULL,
+  master_code           STRING,
+  source_system         STRING,
+  original_code         STRING,
+  original_description  STRING,
+  create_date           TIMESTAMP,
+  create_by             STRING,
+  update_date           TIMESTAMP,
+  update_by             STRING,
+  PRIMARY KEY (religion_id) NOT ENFORCED
+);
 
--- SELECT c.comp_name, a.address_line, a.kabupaten_kota
--- FROM `your_project.lov_gold.comp` c
--- JOIN `your_project.lov_gold.comp_addr` a USING (comp_id)
--- WHERE a.is_primary = TRUE;
+INSERT INTO `lov_gold.religion`
+(religion_id, master_code, source_system, original_code, original_description, create_date, create_by, update_date, update_by)
+VALUES
+('REL01', 'REL01', 'CORE_BANKING', '1', 'Islam',   TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('REL02', 'REL02', 'CORE_BANKING', '2', 'Kristen', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('REL03', 'REL03', 'CORE_BANKING', '3', 'Katolik', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('REL04', 'REL04', 'CORE_BANKING', '4', 'Hindu',   TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('REL05', 'REL05', 'CORE_BANKING', '5', 'Buddha',  TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
+
+
+-- ------------------------------------------------------------
+-- 4. lov_gold.job_title (standalone)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.job_title` (
+  job_title_id          STRING  NOT NULL,
+  master_code           STRING,
+  source_system         STRING,
+  original_code         STRING,
+  original_description  STRING,
+  create_date           TIMESTAMP,
+  create_by             STRING,
+  update_date           TIMESTAMP,
+  update_by             STRING,
+  PRIMARY KEY (job_title_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.job_title`
+(job_title_id, master_code, source_system, original_code, original_description, create_date, create_by, update_date, update_by)
+VALUES
+('JT001', 'JT001', 'CORE_BANKING', 'DIR', 'Direktur',        TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('JT002', 'JT002', 'CORE_BANKING', 'MGR', 'Manager',         TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('JT003', 'JT003', 'CORE_BANKING', 'SPV', 'Supervisor',      TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('JT004', 'JT004', 'CORE_BANKING', 'STF', 'Staff',           TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('JT005', 'JT005', 'CORE_BANKING', 'OWN', 'Pemilik Usaha',   TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
+
+
+-- ------------------------------------------------------------
+-- 5. lov_gold.emergency_contact (standalone)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.emergency_contact` (
+  emer_cont_id                    STRING  NOT NULL,
+  master_code                     STRING,
+  source_system                   STRING,
+  original_code                   STRING,
+  original_contact_name           STRING,
+  effective_date                  DATE,
+  expiry_date                     DATE,
+  is_current                      BOOL,
+  original_destination_code       STRING,
+  original_phone_number           STRING,
+  original_phone_number_extension STRING,
+  original_phone_type             STRING,
+  original_sequence                INT64,
+  create_date                     TIMESTAMP,
+  create_by                       STRING,
+  update_date                     TIMESTAMP,
+  update_by                       STRING,
+  PRIMARY KEY (emer_cont_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.emergency_contact`
+(emer_cont_id, master_code, source_system, original_code, original_contact_name, effective_date, expiry_date, is_current, original_destination_code, original_phone_number, original_phone_number_extension, original_phone_type, original_sequence, create_date, create_by, update_date, update_by)
+VALUES
+('EC001', 'EC001', 'CORE_BANKING', 'EC001', 'Rina Wijaya',    DATE '2022-01-01', NULL, TRUE, '62', '8123456701', NULL, 'MOBILE', 1, TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM'),
+('EC002', 'EC002', 'CORE_BANKING', 'EC002', 'Dedi Kurniawan', DATE '2022-01-01', NULL, TRUE, '62', '8123456702', NULL, 'MOBILE', 1, TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM'),
+('EC003', 'EC003', 'CORE_BANKING', 'EC003', 'Yuni Astuti',    DATE '2022-01-01', NULL, TRUE, '62', '8123456703', NULL, 'MOBILE', 1, TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM'),
+('EC004', 'EC004', 'CORE_BANKING', 'EC004', 'Hendra Saputra', DATE '2022-01-01', NULL, TRUE, '62', '8123456704', NULL, 'MOBILE', 1, TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM'),
+('EC005', 'EC005', 'CORE_BANKING', 'EC005', 'Lestari Wulandari', DATE '2022-01-01', NULL, TRUE, '62', '8123456705', NULL, 'MOBILE', 1, TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2022-01-01 00:00:00', 'SYSTEM');
+
+
+-- ------------------------------------------------------------
+-- 6. lov_gold.education (standalone)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.education` (
+  education_id          STRING  NOT NULL,
+  master_code           STRING,
+  source_system         STRING,
+  original_code         STRING,
+  original_description  STRING,
+  create_date           TIMESTAMP,
+  create_by             STRING,
+  update_date           TIMESTAMP,
+  update_by             STRING,
+  PRIMARY KEY (education_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.education`
+(education_id, master_code, source_system, original_code, original_description, create_date, create_by, update_date, update_by)
+VALUES
+('EDU01', 'EDU01', 'CORE_BANKING', 'SD',  'SD',              TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('EDU02', 'EDU02', 'CORE_BANKING', 'SMP', 'SMP',              TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('EDU03', 'EDU03', 'CORE_BANKING', 'SMA', 'SMA/SMK',          TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('EDU04', 'EDU04', 'CORE_BANKING', 'S1',  'Sarjana (S1)',     TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('EDU05', 'EDU05', 'CORE_BANKING', 'S2',  'Magister (S2)',    TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
+
+
+-- ------------------------------------------------------------
+-- 7. lov_gold.occupation (standalone)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.occupation` (
+  occupation_id         STRING  NOT NULL,
+  master_code           STRING,
+  source_system         STRING,
+  original_code         STRING,
+  original_description  STRING,
+  create_date           TIMESTAMP,
+  create_by             STRING,
+  update_date           TIMESTAMP,
+  update_by             STRING,
+  PRIMARY KEY (occupation_id) NOT ENFORCED
+);
+
+INSERT INTO `lov_gold.occupation`
+(occupation_id, master_code, source_system, original_code, original_description, create_date, create_by, update_date, update_by)
+VALUES
+('OCC01', 'OCC01', 'CORE_BANKING', 'PNS',  'Pegawai Negeri Sipil', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('OCC02', 'OCC02', 'CORE_BANKING', 'SWT',  'Karyawan Swasta',      TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('OCC03', 'OCC03', 'CORE_BANKING', 'WRS',  'Wiraswasta',           TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('OCC04', 'OCC04', 'CORE_BANKING', 'PRO',  'Profesional',          TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM'),
+('OCC05', 'OCC05', 'CORE_BANKING', 'IBU',  'Ibu Rumah Tangga',     TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM', TIMESTAMP '2020-01-01 00:00:00', 'SYSTEM');
+
+
+-- ============================================================
+-- ADJUST FK DI TABEL EXISTING BIAR NYAMBUNG
+-- ============================================================
+
+-- lov_gold.employer.nob_id -> lov_gold.nob(nob_id)
+-- (data nob_id di lov_gold.employer udah NOB01/NOB02/NOB03, semua
+--  udah ada di lov_gold.nob, jadi tinggal tambahin constraint-nya)
+ALTER TABLE `lov_gold.employer`
+  ADD CONSTRAINT fk_employer_nob
+  FOREIGN KEY (nob_id) REFERENCES `lov_gold.nob`(nob_id) NOT ENFORCED;
+
+-- lov_gold.employer_address -> tambahin kolom postcode_id, backfill,
+-- baru tambahin constraint-nya (kolom `postcode` lama tetap
+-- dipertahankan sebagai denormalized copy biar gak perlu join
+-- buat nampilin kode pos doang)
+ALTER TABLE `lov_gold.employer_address`
+  ADD COLUMN IF NOT EXISTS postcode_id STRING;
+
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC001' WHERE address_id = 'AD001';
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC002' WHERE address_id = 'AD002';
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC003' WHERE address_id = 'AD003';
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC004' WHERE address_id = 'AD004';
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC005' WHERE address_id = 'AD005';
+UPDATE `lov_gold.employer_address` SET postcode_id = 'PC006' WHERE address_id = 'AD006';
+
+ALTER TABLE `lov_gold.employer_address`
+  ADD CONSTRAINT fk_address_postcode
+  FOREIGN KEY (postcode_id) REFERENCES `lov_gold.postcode`(post_code_id) NOT ENFORCED;
+
+
+-- ============================================================
+-- VERIFIKASI
+-- ============================================================
+
+-- 1. Cek orphan nob_id & postcode_id (harusnya 0 row)
+SELECT 'employer.nob_id' AS kolom, e.employer_id, e.nob_id
+FROM `lov_gold.employer` e
+LEFT JOIN `lov_gold.nob` n ON e.nob_id = n.nob_id
+WHERE e.nob_id IS NOT NULL AND n.nob_id IS NULL
+UNION ALL
+SELECT 'employer_address.postcode_id', a.address_id, a.postcode_id
+FROM `lov_gold.employer_address` a
+LEFT JOIN `lov_gold.postcode` p ON a.postcode_id = p.post_code_id
+WHERE a.postcode_id IS NOT NULL AND p.post_code_id IS NULL;
+
+-- 2. Contoh query gabungan employer + sektor bisnis + kode wilayah lengkap
+SELECT
+  e.employer_name,
+  n.original_sector,
+  n.original_industry,
+  n.kbli,
+  a.address_detail,
+  p.kode_pos,
+  p.kode_kemendagri
+FROM `lov_gold.employer` e
+JOIN `lov_gold.nob` n ON e.nob_id = n.nob_id
+JOIN `lov_gold.employer_address` a ON e.employer_id = a.employer_id AND a.is_primary = TRUE
+JOIN `lov_gold.postcode` p ON a.postcode_id = p.post_code_id
+ORDER BY e.employer_id;

@@ -14,22 +14,22 @@ async def get_all_company_add(client: bigquery.Client = Depends(get_db)) -> list
         client,
         f"""
         SELECT
-            addr_id,
-            comp_id,
-            addr_type,
-            address_line,
-            rt_rw,
-            kelurahan,
-            kecamatan,
-            kabupaten_kota,
-            provinsi,
-            postal_code,
-            latitude,
-            longitude,
+            address_id,
+            employer_id,
+            address_type,
+            address_detail,
+            subdistrict,
+            district,
+            city,
+            province,
+            postcode,
+            postcode_id,
             is_primary,
-            gold_load_ts
-        FROM {qualified_table("comp_addr")}
-        ORDER BY comp_id, addr_type
+            is_current,
+            effective_date,
+            expiry_date
+        FROM {qualified_table("employer_address")}
+        ORDER BY employer_id, address_type
         """,
         CompanyAddRead,
     )

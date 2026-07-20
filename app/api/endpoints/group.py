@@ -13,16 +13,12 @@ async def get_all_group(client: bigquery.Client = Depends(get_db)) -> list[Group
     return await fetch_all(
         client,
         f"""
-        SELECT
+        SELECT DISTINCT
             group_id,
-            comp_id,
-            parent_comp_id,
-            group_name,
-            relationship_type,
-            ownership_level,
-            gold_load_ts
-        FROM {qualified_table("comp_group")}
-        ORDER BY group_name, comp_id
+            group_name
+        FROM {qualified_table("employer")}
+        WHERE group_id IS NOT NULL
+        ORDER BY group_name
         """,
         GroupRead,
     )

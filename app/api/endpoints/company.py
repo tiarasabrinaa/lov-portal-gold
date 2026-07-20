@@ -6,25 +6,43 @@ from app.schemas.company import CompanyRead
 
 router = APIRouter()
 
+_EMPLOYER_COLUMNS = """
+    employer_id,
+    group_id,
+    nob_id,
+    cif,
+    stock_code,
+    employer_name,
+    ipo_date,
+    is_top_1000,
+    is_pks,
+    tier,
+    group_name,
+    cl_account,
+    cl_loan_type,
+    primary_address_detail,
+    primary_address_subdistrict,
+    primary_address_district,
+    primary_address_city,
+    primary_address_province,
+    primary_address_postcode,
+    primary_contact,
+    shareholder_count,
+    top_shareholder_name,
+    top_shareholder_pct,
+    account_count,
+    primary_account_number,
+    snapshot_date
+"""
+
+
 @router.get("/", summary="Get company data")
 async def get_company_data(client: bigquery.Client = Depends(get_db)) -> list[CompanyRead]:
     query = f"""
         SELECT
-            comp_id,
-            comp_code,
-            comp_name,
-            comp_short_name,
-            comp_type,
-            npwp,
-            nib,
-            kbli_code,
-            industry_sector,
-            incorporation_date,
-            comp_status,
-            source_system,
-            gold_load_ts
-        FROM {qualified_table("comp")}
-        ORDER BY comp_name
+            {_EMPLOYER_COLUMNS}
+        FROM {qualified_table("employer")}
+        ORDER BY employer_name
     """
     rows = await run_query(client, query)
     return [CompanyRead(**row) for row in rows]
@@ -38,22 +56,10 @@ async def search_company(
 ) -> list[CompanyRead]:
     query = f"""
         SELECT
-            comp_id,
-            comp_code,
-            comp_name,
-            comp_short_name,
-            comp_type,
-            npwp,
-            nib,
-            kbli_code,
-            industry_sector,
-            incorporation_date,
-            comp_status,
-            source_system,
-            gold_load_ts
-        FROM {qualified_table("comp")}
-        WHERE LOWER(comp_name) LIKE LOWER(@q)
-        ORDER BY comp_name
+            {_EMPLOYER_COLUMNS}
+        FROM {qualified_table("employer")}
+        WHERE LOWER(employer_name) LIKE LOWER(@q)
+        ORDER BY employer_name
         LIMIT @limit
     """
     params = [

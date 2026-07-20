@@ -14,6 +14,7 @@ async def get_all_religion(client: bigquery.Client = Depends(get_db)) -> list[Re
         client,
         f"""
         SELECT
+            religion_id,
             master_code,
             source_system,
             original_code,

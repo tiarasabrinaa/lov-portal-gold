@@ -14,15 +14,24 @@ async def get_all_nature_of_business(client: bigquery.Client = Depends(get_db)) 
         client,
         f"""
         SELECT
+            nob_id,
             master_code,
             source_system,
             original_code,
-            original_description,
+            original_sector,
+            original_sub_sector,
+            original_industry,
+            original_sub_industry,
+            kbli,
+            individual_type,
+            effective_date,
+            expiry_date,
+            is_current,
             create_date,
             create_by,
             update_date,
             update_by
-        FROM {qualified_table("nature_of_business")}
+        FROM {qualified_table("nob")}
         ORDER BY master_code
         """,
         NatureOfBusinessRead,

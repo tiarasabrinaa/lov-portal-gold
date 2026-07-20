@@ -14,6 +14,7 @@ async def get_all_occupation(client: bigquery.Client = Depends(get_db)) -> list[
         client,
         f"""
         SELECT
+            occupation_id,
             master_code,
             source_system,
             original_code,

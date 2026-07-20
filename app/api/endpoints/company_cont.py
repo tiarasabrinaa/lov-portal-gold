@@ -9,22 +9,21 @@ router = APIRouter()
 
 @router.get("/{code}/contacts", summary="Get contact data by company")
 async def get_company_contacts(
-    code: str = Path(..., min_length=1, description="Company code (comp_code)"),
+    code: str = Path(..., min_length=1, description="Company stock code"),
     client: bigquery.Client = Depends(get_db),
 ) -> list[CompanyContRead]:
     query = f"""
         SELECT
-            cc.cont_id,
-            cc.comp_id,
-            cc.contact_type,
-            cc.contact_value,
-            cc.pic_name,
-            cc.is_primary,
-            cc.gold_load_ts
-        FROM {qualified_table("comp_cont")} cc
-        JOIN {qualified_table("comp")} c ON c.comp_id = cc.comp_id
-        WHERE c.comp_code = @code
-        ORDER BY cc.comp_id, cc.contact_type
+            ec.contact_id,
+            ec.employer_id,
+            ec.contact_type,
+            ec.contact_value,
+            ec.is_primary,
+            ec.snapshot_date
+        FROM {qualified_table("employer_contact")} ec
+        JOIN {qualified_table("employer")} e ON e.employer_id = ec.employer_id
+        WHERE e.stock_code = @code
+        ORDER BY ec.employer_id, ec.contact_type
     """
     params = [bigquery.ScalarQueryParameter("code", "STRING", code)]
     rows = await run_query(client, query, params)

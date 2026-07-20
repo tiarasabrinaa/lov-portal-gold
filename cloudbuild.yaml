@@ -1,0 +1,29 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "-t"
+      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+      - .
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - push
+      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - lov-portal-gold-git
+      - "--image=asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+      - "--region=asia-southeast2"
+      - "--allow-unauthenticated"
+      - "--set-env-vars=BIGQUERY_PROJECT=sandbox-lov,BIGQUERY_DATASET=lov_gold,BIGQUERY_LOCATION=asia-southeast2"
+
+images:
+  - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -15,20 +15,20 @@ async def get_all_company_add(client: bigquery.Client = Depends(get_db)) -> list
         f"""
         SELECT
             address_id,
+            postcode_id,
             employer_id,
+            employer_name,
+            group_name,
             address_type,
+            rt,
+            rw,
             address_detail,
             subdistrict,
             district,
             city,
             province,
-            postcode,
-            postcode_id,
-            is_primary,
-            is_current,
-            effective_date,
-            expiry_date
-        FROM {qualified_table("employer_address")}
+            snapshot_date
+        FROM {qualified_table("view_employer_address")}
         ORDER BY employer_id, address_type
         """,
         CompanyAddRead,

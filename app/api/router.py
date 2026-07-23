@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
+from app.api.endpoints.company_account import router as company_account_router
 from app.api.endpoints.company_add import router as company_add_router
-from app.api.endpoints.company_cont import router as company_cont_router
 from app.api.endpoints.company import router as company_router
-from app.api.endpoints.company_shareholder import router as company_shareholder_router
+from app.api.endpoints.company_ownership import router as company_ownership_router
 from app.api.endpoints.education import router as education_router
 from app.api.endpoints.emergency_contact import router as emergency_contact_router
 from app.api.endpoints.group import router as group_router
@@ -27,6 +27,6 @@ api_router.include_router(emergency_contact_router, prefix="/emergency-contacts"
 api_router.include_router(education_router, prefix="/educations", tags=["education"])
 api_router.include_router(occupation_router, prefix="/occupations", tags=["occupation"])
 api_router.include_router(nature_of_business_router, prefix="/nature-of-businesses", tags=["nature-of-business"])
-api_router.include_router(company_cont_router, prefix="/company", tags=["company"])
 api_router.include_router(company_add_router, prefix="/company-addresses", tags=["company-add"])
-api_router.include_router(company_shareholder_router, prefix="/company", tags=["company"])
+api_router.include_router(company_account_router, prefix="/company-accounts", tags=["company-account"])
+api_router.include_router(company_ownership_router, prefix="/company-ownership", tags=["company-ownership"])

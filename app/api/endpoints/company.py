@@ -1,59 +1,62 @@
 from fastapi import APIRouter, Depends, HTTPException
 from google.cloud import bigquery
 
+from app.api.endpoints._helpers import fetch_all
 from app.core.database import get_db, qualified_table, run_query
 from app.schemas.company import CompanyRead
 
 router = APIRouter()
 
 _EMPLOYER_COLUMNS = """
-  employer_id,
-  group_id,
-  nob_id,
-  cif,
-  employer_name,
-  employer_code,
-  stock_code,
-  ipo_date,
-  sector,
-  sub_sector,
-  industry                     STRING,
-  subindustry                  STRING,
-  kbli                         STRING,
-  is_top_1000                  BOOL,
-  is_pks                       BOOL,
-  tier                         STRING,
-  group_name                   STRING,
-  primary_email                STRING,
-  primary_contact_no           STRING,
-  cl_account                   STRING,
-  cl_loan_type                 STRING,
-  shareholder_count            INT64,
-  top_shareholder_name         STRING,
-  top_shareholder_percentage   NUMERIC,
-  account_count                INT64,
-  primary_address_postcode     STRING,
-  primary_address_rt           STRING,
-  primary_address_rw           STRING,
-  primary_address_detail       STRING,
-  primary_address_subdistrict  STRING,
-  primary_address_district,
-  primary_address_city,
-  primary_address_province,
-  snapshot_date
+    employer_id,
+    group_id,
+    nob_id,
+    cif,
+    employer_name,
+    employer_code,
+    stock_code,
+    ipo_date,
+    sector,
+    sub_sector,
+    industry,
+    subindustry,
+    kbli,
+    is_top_1000,
+    is_pks,
+    tier,
+    group_name,
+    primary_email,
+    primary_contact_no,
+    cl_account,
+    cl_loan_type,
+    shareholder_count,
+    top_shareholder_name,
+    top_shareholder_percentage,
+    account_count,
+    primary_address_postcode,
+    primary_address_rt,
+    primary_address_rw,
+    primary_address_detail,
+    primary_address_subdistrict,
+    primary_address_district,
+    primary_address_city,
+    primary_address_province,
+    snapshot_date
 """
 
 
-@router.get("/", summary="Get company data")
-async def get_company_data(client: bigquery.Client = Depends(get_db)) -> list[CompanyRead]:
-    query = f"""
+@router.get("/", summary="Get all company data")
+async def get_all_company(client: bigquery.Client = Depends(get_db)) -> list[CompanyRead]:
+    return await fetch_all(
+        client,
+        f"""
         SELECT
             {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        FROM {qualified_table("view_employer")}
         ORDER BY employer_name
-    """
-    rows = await run_query(client, query)
-    return [CompanyRead(**row) for row in rows]
+        """,
+        CompanyRead,
+    )
 
 
 @router.get("/search", summary="Search company by name")
@@ -65,7 +68,7 @@ async def search_company(
     query = f"""
         SELECT
             {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        FROM {qualified_table("view_employer")}
         WHERE LOWER(employer_name) LIKE LOWER(@q)
         ORDER BY employer_name
         LIMIT @limit
@@ -99,7 +102,7 @@ async def get_company_by_region(
     query = f"""
         SELECT
             {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        FROM {qualified_table("view_employer")}
         WHERE {" AND ".join(conditions)}
         ORDER BY employer_name
     """
@@ -116,7 +119,7 @@ async def get_company_by_cif_status(
     query = f"""
         SELECT
             {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        FROM {qualified_table("view_employer")}
         WHERE {condition}
         ORDER BY employer_name
     """

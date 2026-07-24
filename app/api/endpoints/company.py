@@ -17,6 +17,7 @@ class EmployerRead(BaseModel):
     cif: str
     employer_code: str | None = None
     employer_name: str
+    industry: str | None = None
     primary_telephone: str | None = None
     primary_email: str | None = None
     tiering: str | None = None
@@ -72,6 +73,7 @@ _EMPLOYER_COLUMNS = """
     cif,
     employer_code,
     employer_name,
+    industry,
     primary_telephone,
     primary_email,
     tiering,
@@ -166,6 +168,7 @@ async def get_employer_by_account_number(
             e.cif,
             e.employer_code,
             e.employer_name,
+            e.industry,
             e.primary_telephone,
             e.primary_email,
             e.tiering,

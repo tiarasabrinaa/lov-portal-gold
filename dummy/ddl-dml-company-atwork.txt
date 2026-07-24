@@ -49,6 +49,7 @@ CREATE OR REPLACE TABLE `lov_gold.employer` (
   cif                STRING  NOT NULL,
   employer_code      STRING,
   employer_name      STRING  NOT NULL,
+  industry           STRING,
   primary_telephone  STRING,
   primary_email      STRING,
   tiering            STRING,
@@ -119,22 +120,22 @@ CREATE OR REPLACE TABLE `lov_gold.address` (
 
 -- 1. employer
 INSERT INTO `lov_gold.employer`
-(employer_id, group_id, nob_id, cif, employer_code, employer_name,
+(employer_id, group_id, nob_id, cif, employer_code, employer_name, industry,
  primary_telephone, primary_email, tiering, is_pks, is_ntb, snapshot_date)
 VALUES
-('EMP001','GRP001','NOB01','1000000001','EC00001','PT Sinar Abadi Sejahtera Tbk',
+('EMP001','GRP001','NOB01','1000000001','EC00001','PT Sinar Abadi Sejahtera Tbk','Bank Umum',
  '021-5551234','info@sinarabadi.co.id','GOLD', FALSE, TRUE, DATE '2026-07-24'),
 
-('EMP002','GRP002','NOB02','1000000002','EC00002','PT Maju Jaya Makmur',
+('EMP002','GRP002','NOB02','1000000002','EC00002','PT Maju Jaya Makmur','Distribusi Barang Konsumsi',
  '031-5559876','contact@majujaya.co.id','SILVER', TRUE, FALSE, DATE '2026-07-24'),
 
-('EMP003','GRP003','NOB03','1000000003','EC00003','PT Cahaya Nusantara Tbk',
+('EMP003','GRP003','NOB03','1000000003','EC00003','PT Cahaya Nusantara Tbk','Konstruksi Bangunan Komersial',
  '022-5551122','cs@cahayanusantara.co.id','GOLD', FALSE, TRUE, DATE '2026-07-24'),
 
-('EMP004','GRP004','NOB04','1000000004','EC00004','PT Bumi Perkasa Mandiri',
+('EMP004','GRP004','NOB04','1000000004','EC00004','PT Bumi Perkasa Mandiri','Pengolahan Makanan',
  '061-5552468','info@bumiperkasa.co.id','SILVER', FALSE, FALSE, DATE '2026-07-24'),
 
-('EMP005','GRP005','NOB05','1000000005','EC00005','PT Karya Utama Sentosa',
+('EMP005','GRP005','NOB05','1000000005','EC00005','PT Karya Utama Sentosa','Perkebunan Kelapa Sawit',
  '024-5553579','admin@karyautama.co.id','BRONZE', TRUE, FALSE, DATE '2026-07-24');
 
 
@@ -216,7 +217,7 @@ GROUP BY employer_id
 HAVING COUNT(*) != 1;
 
 -- 3. Contoh query self-service tanpa join
-SELECT employer_name, tiering, is_pks, is_ntb, primary_email
+SELECT employer_name, industry, tiering, is_pks, is_ntb, primary_email
 FROM `lov_gold.employer`;
 
 SELECT branch_name, branch_code, branch_telephone

@@ -38,6 +38,13 @@ Company lov_gold v3 (redesign dari dummy/design-gold-company-atwork.png, versi t
 --   persis sama PRIMARY KEY tabel tujuan (employer_id, bukan cif) -
 --   jadi cif di gold_employer_account dibiarin kolom deskriptif aja
 --   tanpa constraint FK formal (sama pola kayak v2 dulu).
+--
+-- Update 2026-07-27: gold_employer_account awalnya cuma punya cif
+-- (ga ada employer_id sama sekali, lihat catatan di atas). Ditambahin
+-- kolom employer_id (backfill dari cif via join ke gold_employer_profile)
+-- supaya endpoint /accounts/by-employer-id/{employer_id} bisa query
+-- langsung tanpa resolve cif dulu, dan FK formal employer_id->employer_id
+-- sekarang valid (match PRIMARY KEY gold_employer_profile).
 -- ============================================================
 
 CREATE SCHEMA IF NOT EXISTS `lov_gold`;
@@ -68,6 +75,7 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
   account_id        STRING  NOT NULL,
+  employer_id       STRING,
   cif               STRING,
   branch_code       STRING,
   branch_name       STRING,
@@ -81,10 +89,13 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
   account_type      STRING,   -- is_giro: 'GIRO' | 'DEPOSITO' | dst.
   is_sharia         BOOL,
   snapshot_date     DATE    NOT NULL,
-  PRIMARY KEY (account_id) NOT ENFORCED
-  -- cif dibiarin sebagai kolom deskriptif, gak dipasangin FOREIGN KEY
-  -- formal: BigQuery mewajibkan kolom FK match persis sama PRIMARY KEY
-  -- tabel tujuan, dan PK gold_employer_profile itu employer_id, bukan cif.
+  PRIMARY KEY (account_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.gold_employer_profile`(employer_id) NOT ENFORCED
+  -- employer_id ditambahin belakangan (awalnya cuma ada cif di gambar
+  -- ERD) supaya lookup langsung by-employer_id ga perlu resolve lewat
+  -- cif dulu. cif tetap dibiarin sebagai kolom deskriptif tanpa FK
+  -- formal (BigQuery mewajibkan kolom FK match persis PRIMARY KEY
+  -- tabel tujuan, dan cif bukan PK gold_employer_profile).
 );
 
 -- ------------------------------------------------------------
@@ -162,26 +173,26 @@ VALUES
 
 -- 2. gold_employer_account (6 baris — EMP001 punya 2 account)
 INSERT INTO `lov_gold.gold_employer_account`
-(account_id, cif, branch_code, branch_name, branch_address1, branch_address2,
+(account_id, employer_id, cif, branch_code, branch_name, branch_address1, branch_address2,
  branch_telephone, branch_email, account_number, currency, product_code,
  account_type, is_sharia, snapshot_date)
 VALUES
-('ACC001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+('ACC001','EMP001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
  '021-5701234','cabang.sudirman@banksample.co.id','1234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC002','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+('ACC002','EMP001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
  '021-5701234','cabang.sudirman@banksample.co.id','1234567891','IDR','DEP01','DEPOSITO', FALSE, DATE '2026-07-24'),
 
-('ACC003','1000000002','BR002','Cabang Surabaya Basuki Rahmat','Jl. Basuki Rahmat No. 100','Lantai 2',
+('ACC003','EMP002','1000000002','BR002','Cabang Surabaya Basuki Rahmat','Jl. Basuki Rahmat No. 100','Lantai 2',
  '031-5709876','cabang.surabaya@banksample.co.id','2234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC004','1000000003','BR003','Cabang Bandung Asia Afrika','Jl. Asia Afrika No. 50', NULL,
+('ACC004','EMP003','1000000003','BR003','Cabang Bandung Asia Afrika','Jl. Asia Afrika No. 50', NULL,
  '022-5701122','cabang.bandung@banksample.co.id','3234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC005','1000000004','BR004','Cabang Medan Syariah','Jl. Gatot Subroto No. 20', NULL,
+('ACC005','EMP004','1000000004','BR004','Cabang Medan Syariah','Jl. Gatot Subroto No. 20', NULL,
  '061-5702468','cabang.medansyariah@banksample.co.id','4234567890','IDR','GIRO01','GIRO', TRUE, DATE '2026-07-24'),
 
-('ACC006','1000000005','BR005','Cabang Semarang Pandanaran','Jl. Pandanaran No. 40', NULL,
+('ACC006','EMP005','1000000005','BR005','Cabang Semarang Pandanaran','Jl. Pandanaran No. 40', NULL,
  '024-5703579','cabang.semarang@banksample.co.id','5234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24');
 
 

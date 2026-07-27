@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.endpoints.company import router as company_router
+from app.api.endpoints.company_cif import router as company_cif_router
 from app.api.endpoints.education import router as education_router
 from app.api.endpoints.emergency_contact import router as emergency_contact_router
 from app.api.endpoints.group import router as group_router
@@ -15,6 +16,10 @@ from app.api.endpoints.users import router as users_router
 api_router = APIRouter()
 api_router.include_router(health_router, prefix="/health", tags=["health"])
 api_router.include_router(company_router, prefix="/company", tags=["company"])
+# company_cif_router (endpoint /{cif}) HARUS didaftarin SETELAH company_router -
+# supaya path statis kayak /company/employers/by-name & /by-employer-id/{id}
+# ke-match duluan, bukan ketangkep sama {cif} yang sifatnya catch-all.
+api_router.include_router(company_cif_router, prefix="/company", tags=["company"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(post_code_router, prefix="/post-codes", tags=["post-code"])
 api_router.include_router(group_router, prefix="/groups", tags=["group"])

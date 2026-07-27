@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from google.cloud import bigquery
 from pydantic import BaseModel
 
@@ -28,6 +28,13 @@ class EmployerProfileRead(BaseModel):
     primary_email: str | None = None
     primary_contact_no: str | None = None
     snapshot_date: date
+
+
+class PaginatedEmployers(BaseModel):
+    items: list[EmployerProfileRead]
+    total: int
+    page: int
+    page_size: int
 
 
 class EmployerAccountRead(BaseModel):
@@ -167,21 +174,41 @@ async def _get_all_employer_rows(client: bigquery.Client) -> list[dict]:
     )
 
 
-@router.get("/employers", summary="Get all employer profiles")
-async def get_all_employers(client: bigquery.Client = Depends(get_db)) -> list[EmployerProfileRead]:
+def _paginate(rows: list[dict], page: int, page_size: int) -> PaginatedEmployers:
+    start = (page - 1) * page_size
+    end = start + page_size
+    return PaginatedEmployers(
+        items=[EmployerProfileRead(**row) for row in rows[start:end]],
+        total=len(rows),
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/employers", summary="Get all employer profiles (paginated)")
+async def get_all_employers(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    client: bigquery.Client = Depends(get_db),
+) -> PaginatedEmployers:
     rows = await _get_all_employer_rows(client)
-    return [EmployerProfileRead(**row) for row in rows]
+    return _paginate(rows, page, page_size)
 
 
-@router.get("/employers/by-name", summary="Get employer profiles by name (substring, case-insensitive)")
+@router.get(
+    "/employers/by-name",
+    summary="Get employer profiles by name (substring, case-insensitive, paginated)",
+)
 async def get_employer_by_name(
     name: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
     client: bigquery.Client = Depends(get_db),
-) -> list[EmployerProfileRead]:
+) -> PaginatedEmployers:
     rows = await _get_all_employer_rows(client)
     needle = name.lower()
     matches = [row for row in rows if needle in (row["employer_name"] or "").lower()]
-    return [EmployerProfileRead(**row) for row in matches]
+    return _paginate(matches, page, page_size)
 
 
 @router.get("/employers/{cif}", summary="Get employer profile by cif")

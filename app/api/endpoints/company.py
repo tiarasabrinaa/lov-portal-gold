@@ -39,6 +39,7 @@ class PaginatedEmployers(BaseModel):
 
 class EmployerAccountRead(BaseModel):
     account_id: str
+    employer_id: str | None = None
     cif: str | None = None
     branch_code: str | None = None
     branch_name: str | None = None
@@ -105,6 +106,7 @@ _EMPLOYER_PROFILE_COLUMNS = """
 
 _EMPLOYER_ACCOUNT_COLUMNS = """
     account_id,
+    employer_id,
     cif,
     branch_code,
     branch_name,
@@ -211,6 +213,15 @@ async def get_employer_by_name(
     return _paginate(matches, page, page_size)
 
 
+@router.get("/employers/by-employer-id/{employer_id}", summary="Get employer profile by employer_id")
+async def get_employer_by_employer_id(
+    employer_id: str, client: bigquery.Client = Depends(get_db)
+) -> list[EmployerProfileRead]:
+    rows = await _get_all_employer_rows(client)
+    matches = [row for row in rows if row["employer_id"] == employer_id]
+    return [EmployerProfileRead(**row) for row in matches]
+
+
 @router.get("/employers/{cif}", summary="Get employer profile by cif")
 async def get_employer_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
@@ -251,6 +262,21 @@ async def get_accounts_by_cif(
     return [EmployerAccountRead(**row) for row in rows]
 
 
+@router.get("/accounts/by-employer-id/{employer_id}", summary="Get employer accounts by employer_id")
+async def get_accounts_by_employer_id(
+    employer_id: str, client: bigquery.Client = Depends(get_db)
+) -> list[EmployerAccountRead]:
+    query = f"""
+        SELECT {_EMPLOYER_ACCOUNT_COLUMNS}
+        FROM {qualified_table("gold_employer_account")}
+        WHERE employer_id = @employer_id
+        ORDER BY account_id
+    """
+    params = [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)]
+    rows = await run_query(client, query, params)
+    return [EmployerAccountRead(**row) for row in rows]
+
+
 # ------------------------------------------------------------
 # gold_stakeholder
 # ------------------------------------------------------------
@@ -282,6 +308,21 @@ async def get_stakeholders_by_cif(
     return [StakeholderRead(**row) for row in rows]
 
 
+@router.get("/stakeholders/by-employer-id/{employer_id}", summary="Get stakeholders by employer_id")
+async def get_stakeholders_by_employer_id(
+    employer_id: str, client: bigquery.Client = Depends(get_db)
+) -> list[StakeholderRead]:
+    query = f"""
+        SELECT {_STAKEHOLDER_COLUMNS}
+        FROM {qualified_table("gold_stakeholder")}
+        WHERE employer_id = @employer_id
+        ORDER BY stakeholder_id
+    """
+    params = [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)]
+    rows = await run_query(client, query, params)
+    return [StakeholderRead(**row) for row in rows]
+
+
 # ------------------------------------------------------------
 # gold_address
 # ------------------------------------------------------------
@@ -309,5 +350,20 @@ async def get_addresses_by_cif(
         ORDER BY is_primary DESC
     """
     params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
+    rows = await run_query(client, query, params)
+    return [AddressRead(**row) for row in rows]
+
+
+@router.get("/addresses/by-employer-id/{employer_id}", summary="Get addresses by employer_id")
+async def get_addresses_by_employer_id(
+    employer_id: str, client: bigquery.Client = Depends(get_db)
+) -> list[AddressRead]:
+    query = f"""
+        SELECT {_ADDRESS_COLUMNS}
+        FROM {qualified_table("gold_address")}
+        WHERE employer_id = @employer_id
+        ORDER BY is_primary DESC
+    """
+    params = [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)]
     rows = await run_query(client, query, params)
     return [AddressRead(**row) for row in rows]

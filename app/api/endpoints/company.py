@@ -5,7 +5,10 @@ from google.cloud import bigquery
 from pydantic import BaseModel
 
 from app.api.endpoints._helpers import fetch_all
+from app.core.cache import get_cached_rows
 from app.core.database import get_db, qualified_table, run_query
+
+_EMPLOYERS_CACHE_KEY = "lov:company:employers:all"
 
 router = APIRouter()
 
@@ -145,49 +148,49 @@ _ADDRESS_COLUMNS = """
 
 # ------------------------------------------------------------
 # gold_employer_profile
+#
+# Semua endpoint di bawah baca dari 1 cache Redis (list lengkap
+# employer, TTL settings.cache_ttl_seconds) dan filter di Python -
+# biar "ngetik per huruf" (typeahead) responnya instan tanpa nembak
+# BigQuery tiap keystroke. Cache auto-refresh dari BigQuery begitu
+# TTL abis / cache kosong.
 # ------------------------------------------------------------
-@router.get("/employers", summary="Get all employer profiles")
-async def get_all_employers(client: bigquery.Client = Depends(get_db)) -> list[EmployerProfileRead]:
-    return await fetch_all(
+async def _get_all_employer_rows(client: bigquery.Client) -> list[dict]:
+    return await get_cached_rows(
+        _EMPLOYERS_CACHE_KEY,
         client,
         f"""
         SELECT {_EMPLOYER_PROFILE_COLUMNS}
         FROM {qualified_table("gold_employer_profile")}
         ORDER BY employer_name
         """,
-        EmployerProfileRead,
     )
 
 
-@router.get("/employers/by-name", summary="Get employer profiles by name")
+@router.get("/employers", summary="Get all employer profiles")
+async def get_all_employers(client: bigquery.Client = Depends(get_db)) -> list[EmployerProfileRead]:
+    rows = await _get_all_employer_rows(client)
+    return [EmployerProfileRead(**row) for row in rows]
+
+
+@router.get("/employers/by-name", summary="Get employer profiles by name (substring, case-insensitive)")
 async def get_employer_by_name(
     name: str,
     client: bigquery.Client = Depends(get_db),
 ) -> list[EmployerProfileRead]:
-    query = f"""
-        SELECT {_EMPLOYER_PROFILE_COLUMNS}
-        FROM {qualified_table("gold_employer_profile")}
-        WHERE LOWER(employer_name) LIKE LOWER(@name)
-        ORDER BY employer_name
-    """
-    params = [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")]
-    rows = await run_query(client, query, params)
-    return [EmployerProfileRead(**row) for row in rows]
+    rows = await _get_all_employer_rows(client)
+    needle = name.lower()
+    matches = [row for row in rows if needle in (row["employer_name"] or "").lower()]
+    return [EmployerProfileRead(**row) for row in matches]
 
 
 @router.get("/employers/{cif}", summary="Get employer profile by cif")
 async def get_employer_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerProfileRead]:
-    query = f"""
-        SELECT {_EMPLOYER_PROFILE_COLUMNS}
-        FROM {qualified_table("gold_employer_profile")}
-        WHERE cif = @cif
-        ORDER BY employer_name
-    """
-    params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
-    rows = await run_query(client, query, params)
-    return [EmployerProfileRead(**row) for row in rows]
+    rows = await _get_all_employer_rows(client)
+    matches = [row for row in rows if row["cif"] == cif]
+    return [EmployerProfileRead(**row) for row in matches]
 
 
 # ------------------------------------------------------------

@@ -8,8 +8,18 @@ services:
       BIGQUERY_DATASET: lov_gold
       BIGQUERY_LOCATION: asia-southeast2
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/sandbox-lov-760ab321486a.json
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./secrets/sandbox-lov-760ab321486a.json:/secrets/sandbox-lov-760ab321486a.json:ro
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: lov-portal-redis
+    ports:
+      - "6379:6379"

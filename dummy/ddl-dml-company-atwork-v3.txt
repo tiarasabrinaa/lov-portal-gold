@@ -1,0 +1,261 @@
+lov_gold company (atwork design) - v3 ddl dml
+
+Company lov_gold v3 (redesign dari dummy/design-gold-company-atwork.png, versi terbaru) · SQL
+-- ============================================================
+-- COMPANY lov_GOLD (v3 / "atwork" design) - BigQuery Standard SQL
+-- Dataset: lov_gold
+-- 4 tabel: gold_employer_profile, gold_employer_account,
+--          gold_stakeholder, gold_address
+--
+-- Sumber: dummy/design-gold-company-atwork.png (ERD, versi terbaru
+-- yang di-upload 2026-07-27). Ini MENGGANTIKAN desain v2
+-- (dummy/ddl-dml-company-atwork.txt: employer / employer_account /
+-- branch / address). Nama tabel sengaja beda (prefix gold_) supaya
+-- tidak bentrok dengan tabel v2/v1 lama - boleh hidup bareng sampai
+-- tabel lama di-drop manual.
+--
+-- Perubahan utama dari v2:
+-- - branch jadi standalone table di v2 -> sekarang field branch_*
+--   didenormalisasi langsung ke gold_employer_account (ga ada lagi
+--   tabel branch terpisah).
+-- - cif sekarang ada di SEMUA tabel (bukan cuma employer & yang
+--   join lewat employer_id) - jadi cif dipakai sebagai lookup key
+--   utama di API, employer_id/FK lain tetap disimpen sebagai kolom
+--   deskriptif/referensi tapi API-nya standar ke by-cif.
+-- - stakeholder (gold_stakeholder) baru ada di desain ini - belum
+--   ada sama sekali di v2.
+-- - employer_profile v3 lebih kaya field-nya (sector, sub_sector,
+--   industry, subindustry, group_name) dibanding employer v2 yang
+--   cuma industry.
+--
+-- Catatan asumsi (ga eksplisit kelihatan di gambar ERD, cek balik):
+-- - snapshot_date ditambahin di gold_employer_account & gold_address
+--   walau di gambar 2 tabel ini ga kelihatan ada snapshot_date -
+--   diasumsikan konsisten sama pola gold layer yang lain (employer
+--   profile & stakeholder eksplisit ada snapshot_date di gambar).
+-- - Gambar nunjukin cif di gold_employer_account sebagai FK ke
+--   gold_employer_profile, tapi BigQuery cuma izinin FK yang match
+--   persis sama PRIMARY KEY tabel tujuan (employer_id, bukan cif) -
+--   jadi cif di gold_employer_account dibiarin kolom deskriptif aja
+--   tanpa constraint FK formal (sama pola kayak v2 dulu).
+-- ============================================================
+
+CREATE SCHEMA IF NOT EXISTS `lov_gold`;
+
+-- ------------------------------------------------------------
+-- 1. gold_employer_profile
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
+  employer_id          STRING  NOT NULL,
+  group_id             STRING,
+  nob_id               STRING,
+  cif                  STRING  NOT NULL,
+  employer_name        STRING  NOT NULL,
+  employer_code        STRING,
+  sector               STRING,
+  sub_sector           STRING,
+  industry             STRING,
+  subindustry          STRING,
+  group_name           STRING,
+  primary_email        STRING,
+  primary_contact_no   STRING,
+  snapshot_date        DATE    NOT NULL,
+  PRIMARY KEY (employer_id) NOT ENFORCED
+);
+
+-- ------------------------------------------------------------
+-- 2. gold_employer_account (branch_* didenormalisasi di sini)
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
+  account_id        STRING  NOT NULL,
+  cif               STRING,
+  branch_code       STRING,
+  branch_name       STRING,
+  branch_address1   STRING,
+  branch_address2   STRING,
+  branch_telephone  STRING,
+  branch_email      STRING,
+  account_number    STRING,
+  currency          STRING,
+  product_code      STRING,
+  account_type      STRING,   -- is_giro: 'GIRO' | 'DEPOSITO' | dst.
+  is_sharia         BOOL,
+  snapshot_date     DATE    NOT NULL,
+  PRIMARY KEY (account_id) NOT ENFORCED
+  -- cif dibiarin sebagai kolom deskriptif, gak dipasangin FOREIGN KEY
+  -- formal: BigQuery mewajibkan kolom FK match persis sama PRIMARY KEY
+  -- tabel tujuan, dan PK gold_employer_profile itu employer_id, bukan cif.
+);
+
+-- ------------------------------------------------------------
+-- 3. gold_stakeholder
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.gold_stakeholder` (
+  stakeholder_id        STRING  NOT NULL,
+  employer_id           STRING  NOT NULL,
+  cif                   STRING,
+  employer_name         STRING,
+  stock_code            STRING,
+  group_name            STRING,
+  sector                STRING,
+  shareholder_type      STRING,
+  stakeholder_name      STRING,
+  ownership_amount      NUMERIC,
+  ownership_percentage  NUMERIC,
+  designation           STRING,
+  snapshot_date         DATE    NOT NULL,
+  PRIMARY KEY (stakeholder_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.gold_employer_profile`(employer_id) NOT ENFORCED
+);
+
+-- ------------------------------------------------------------
+-- 4. gold_address
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.gold_address` (
+  address_id      STRING  NOT NULL,
+  postcode_id     STRING,
+  employer_id     STRING  NOT NULL,
+  cif             STRING,
+  is_primary      BOOL,
+  rt              STRING,
+  rw              STRING,
+  address_detail  STRING,
+  subdistrict     STRING,
+  district        STRING,
+  city            STRING,
+  province        STRING,
+  snapshot_date   DATE    NOT NULL,
+  PRIMARY KEY (address_id) NOT ENFORCED,
+  FOREIGN KEY (employer_id) REFERENCES `lov_gold.gold_employer_profile`(employer_id) NOT ENFORCED
+);
+
+
+-- ============================================================
+-- DML - SAMPLE DATA (5 employer, konsisten dipakai di semua tabel)
+-- ============================================================
+
+-- 1. gold_employer_profile
+INSERT INTO `lov_gold.gold_employer_profile`
+(employer_id, group_id, nob_id, cif, employer_name, employer_code, sector, sub_sector,
+ industry, subindustry, group_name, primary_email, primary_contact_no, snapshot_date)
+VALUES
+('EMP001','GRP001','NOB01','1000000001','PT Sinar Abadi Sejahtera Tbk','EC00001',
+ 'Jasa Keuangan','Perbankan','Bank Umum','Bank Devisa','Sinar Group',
+ 'info@sinarabadi.co.id','021-5551234', DATE '2026-07-24'),
+
+('EMP002','GRP002','NOB02','1000000002','PT Maju Jaya Makmur','EC00002',
+ 'Perdagangan','Perdagangan Besar','Distribusi','Distribusi Barang Konsumsi','Maju Group',
+ 'contact@majujaya.co.id','031-5559876', DATE '2026-07-24'),
+
+('EMP003','GRP003','NOB03','1000000003','PT Cahaya Nusantara Tbk','EC00003',
+ 'Konstruksi','Konstruksi Gedung','Konstruksi Bangunan Komersial', NULL,'Cahaya Group',
+ 'cs@cahayanusantara.co.id','022-5551122', DATE '2026-07-24'),
+
+('EMP004','GRP004','NOB04','1000000004','PT Bumi Perkasa Mandiri','EC00004',
+ 'Manufaktur','Industri Makanan','Pengolahan Makanan','Makanan Olahan','Bumi Group',
+ 'info@bumiperkasa.co.id','061-5552468', DATE '2026-07-24'),
+
+('EMP005','GRP005','NOB05','1000000005','PT Karya Utama Sentosa','EC00005',
+ 'Pertanian','Perkebunan','Perkebunan Kelapa Sawit', NULL,'Karya Group',
+ 'admin@karyautama.co.id','024-5553579', DATE '2026-07-24');
+
+
+-- 2. gold_employer_account (6 baris — EMP001 punya 2 account)
+INSERT INTO `lov_gold.gold_employer_account`
+(account_id, cif, branch_code, branch_name, branch_address1, branch_address2,
+ branch_telephone, branch_email, account_number, currency, product_code,
+ account_type, is_sharia, snapshot_date)
+VALUES
+('ACC001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+ '021-5701234','cabang.sudirman@banksample.co.id','1234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
+
+('ACC002','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+ '021-5701234','cabang.sudirman@banksample.co.id','1234567891','IDR','DEP01','DEPOSITO', FALSE, DATE '2026-07-24'),
+
+('ACC003','1000000002','BR002','Cabang Surabaya Basuki Rahmat','Jl. Basuki Rahmat No. 100','Lantai 2',
+ '031-5709876','cabang.surabaya@banksample.co.id','2234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
+
+('ACC004','1000000003','BR003','Cabang Bandung Asia Afrika','Jl. Asia Afrika No. 50', NULL,
+ '022-5701122','cabang.bandung@banksample.co.id','3234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
+
+('ACC005','1000000004','BR004','Cabang Medan Syariah','Jl. Gatot Subroto No. 20', NULL,
+ '061-5702468','cabang.medansyariah@banksample.co.id','4234567890','IDR','GIRO01','GIRO', TRUE, DATE '2026-07-24'),
+
+('ACC006','1000000005','BR005','Cabang Semarang Pandanaran','Jl. Pandanaran No. 40', NULL,
+ '024-5703579','cabang.semarang@banksample.co.id','5234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24');
+
+
+-- 3. gold_stakeholder (8 baris)
+INSERT INTO `lov_gold.gold_stakeholder`
+(stakeholder_id, employer_id, cif, employer_name, stock_code, group_name, sector,
+ shareholder_type, stakeholder_name, ownership_amount, ownership_percentage, designation, snapshot_date)
+VALUES
+('SH001','EMP001','1000000001','PT Sinar Abadi Sejahtera Tbk','SNRA','Sinar Group','Jasa Keuangan','Individual','Budi Santoso', 550000000000, 55.00, 'Pemegang Saham Utama', DATE '2026-07-24'),
+('SH002','EMP001','1000000001','PT Sinar Abadi Sejahtera Tbk','SNRA','Sinar Group','Jasa Keuangan','Corporate','PT Modal Investama', 450000000000, 45.00, 'Pemegang Saham', DATE '2026-07-24'),
+('SH003','EMP002','1000000002','PT Maju Jaya Makmur', NULL,'Maju Group','Perdagangan','Individual','Siti Aminah', 300000000000, 60.00, 'Pemegang Saham Utama', DATE '2026-07-24'),
+('SH004','EMP002','1000000002','PT Maju Jaya Makmur', NULL,'Maju Group','Perdagangan','Corporate','PT Investasi Makmur', 200000000000, 40.00, 'Pemegang Saham', DATE '2026-07-24'),
+('SH005','EMP003','1000000003','PT Cahaya Nusantara Tbk','CHYN','Cahaya Group','Konstruksi','Corporate','PT Cahaya Investama', 800000000000, 100.00, 'Pemegang Saham Tunggal', DATE '2026-07-24'),
+('SH006','EMP004','1000000004','PT Bumi Perkasa Mandiri', NULL,'Bumi Group','Manufaktur','Individual','Ahmad Hidayat', 350000000000, 70.00, 'Direktur Utama', DATE '2026-07-24'),
+('SH007','EMP004','1000000004','PT Bumi Perkasa Mandiri', NULL,'Bumi Group','Manufaktur','Individual','Dewi Lestari', 150000000000, 30.00, 'Komisaris', DATE '2026-07-24'),
+('SH008','EMP005','1000000005','PT Karya Utama Sentosa', NULL,'Karya Group','Pertanian','Corporate','PT Karya Investasi', 600000000000, 100.00, 'Pemegang Saham Tunggal', DATE '2026-07-24');
+
+
+-- 4. gold_address (5 primary + 3 sekunder = 8 baris)
+INSERT INTO `lov_gold.gold_address`
+(address_id, postcode_id, employer_id, cif, is_primary, rt, rw, address_detail,
+ subdistrict, district, city, province, snapshot_date)
+VALUES
+-- primary address per employer
+('ADR001','PC100','EMP001','1000000001', TRUE, '005','003','Jl. Sudirman No. 10',
+ 'Karet','Setiabudi','Jakarta Selatan','DKI Jakarta', DATE '2026-07-24'),
+('ADR002','PC101','EMP002','1000000002', TRUE, '002','004','Jl. Basuki Rahmat No. 88',
+ 'Embong Kaliasin','Genteng','Surabaya','Jawa Timur', DATE '2026-07-24'),
+('ADR003','PC102','EMP003','1000000003', TRUE, '001','002','Jl. Asia Afrika No. 45',
+ 'Braga','Sumur Bandung','Bandung','Jawa Barat', DATE '2026-07-24'),
+('ADR004','PC103','EMP004','1000000004', TRUE, '003','001','Jl. Gatot Subroto No. 12',
+ 'Petisah Tengah','Medan Petisah','Medan','Sumatera Utara', DATE '2026-07-24'),
+('ADR005','PC104','EMP005','1000000005', TRUE, '004','002','Jl. Pandanaran No. 30',
+ 'Pekunden','Semarang Tengah','Semarang','Jawa Tengah', DATE '2026-07-24'),
+-- alamat sekunder/cabang (bukan primary)
+('ADR006','PC002','EMP001','1000000001', FALSE, '002','001','Jl. Thamrin No. 5',
+ 'Kebon Melati','Tanah Abang','Jakarta Pusat','DKI Jakarta', DATE '2026-07-24'),
+('ADR007','PC007','EMP002','1000000002', FALSE, '003','002','Jl. Ahmad Yani No. 15',
+ 'Sidokare','Sidoarjo','Sidoarjo','Jawa Timur', DATE '2026-07-24'),
+('ADR008','PC008','EMP004','1000000004', FALSE, '001','001','Jl. Sudirman No. 8',
+ 'Binjai Kota','Binjai','Binjai','Sumatera Utara', DATE '2026-07-24');
+
+
+-- ============================================================
+-- VERIFIKASI
+-- ============================================================
+
+-- 1. Orphan check cif / employer_id (harusnya 0 row)
+SELECT 'gold_employer_account' AS tabel, a.cif
+FROM `lov_gold.gold_employer_account` a
+LEFT JOIN `lov_gold.gold_employer_profile` e ON a.cif = e.cif
+WHERE e.cif IS NULL
+UNION ALL
+SELECT 'gold_stakeholder', s.employer_id
+FROM `lov_gold.gold_stakeholder` s
+LEFT JOIN `lov_gold.gold_employer_profile` e ON s.employer_id = e.employer_id
+WHERE e.employer_id IS NULL
+UNION ALL
+SELECT 'gold_address', ad.employer_id
+FROM `lov_gold.gold_address` ad
+LEFT JOIN `lov_gold.gold_employer_profile` e ON ad.employer_id = e.employer_id
+WHERE e.employer_id IS NULL;
+
+-- 2. Setiap employer harus punya tepat 1 alamat primary
+SELECT employer_id, COUNT(*) AS primary_count
+FROM `lov_gold.gold_address`
+WHERE is_primary = TRUE
+GROUP BY employer_id
+HAVING COUNT(*) != 1;
+
+-- 3. Contoh query self-service tanpa join (semua entity punya cif sendiri)
+SELECT employer_name, industry, sector, primary_email, cif
+FROM `lov_gold.gold_employer_profile`;
+
+SELECT account_number, branch_name, account_type, cif
+FROM `lov_gold.gold_employer_account`
+WHERE cif = '1000000001';

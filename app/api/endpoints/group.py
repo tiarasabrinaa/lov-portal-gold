@@ -16,7 +16,7 @@ async def get_all_group(client: bigquery.Client = Depends(get_db)) -> list[Group
         SELECT DISTINCT
             group_id,
             group_name
-        FROM {qualified_table("employer")}
+        FROM {qualified_table("gold_employer_profile")}
         WHERE group_id IS NOT NULL
         ORDER BY group_name
         """,

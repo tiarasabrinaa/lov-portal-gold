@@ -10,27 +10,32 @@ from app.core.database import get_db, qualified_table, run_query
 router = APIRouter()
 
 
-class EmployerRead(BaseModel):
+class EmployerProfileRead(BaseModel):
     employer_id: str
     group_id: str | None = None
     nob_id: str | None = None
     cif: str
-    employer_code: str | None = None
     employer_name: str
+    employer_code: str | None = None
+    sector: str | None = None
+    sub_sector: str | None = None
     industry: str | None = None
-    primary_telephone: str | None = None
+    subindustry: str | None = None
+    group_name: str | None = None
     primary_email: str | None = None
-    tiering: str | None = None
-    is_pks: bool | None = None
-    is_ntb: bool | None = None
+    primary_contact_no: str | None = None
     snapshot_date: date
 
 
-class AccountRead(BaseModel):
+class EmployerAccountRead(BaseModel):
     account_id: str
-    employer_id: str | None = None
     cif: str | None = None
     branch_code: str | None = None
+    branch_name: str | None = None
+    branch_address1: str | None = None
+    branch_address2: str | None = None
+    branch_telephone: str | None = None
+    branch_email: str | None = None
     account_number: str | None = None
     currency: str | None = None
     product_code: str | None = None
@@ -39,21 +44,26 @@ class AccountRead(BaseModel):
     snapshot_date: date
 
 
-class BranchRead(BaseModel):
-    branch_id: str
-    branch_code: str | None = None
-    branch_name: str | None = None
-    branch_address1: str | None = None
-    branch_address2: str | None = None
-    branch_telephone: str | None = None
-    branch_email: str | None = None
+class StakeholderRead(BaseModel):
+    stakeholder_id: str
+    employer_id: str
+    cif: str | None = None
+    employer_name: str | None = None
+    stock_code: str | None = None
+    group_name: str | None = None
+    sector: str | None = None
+    shareholder_type: str | None = None
+    stakeholder_name: str | None = None
+    ownership_amount: float | None = None
+    ownership_percentage: float | None = None
+    designation: str | None = None
     snapshot_date: date
 
 
 class AddressRead(BaseModel):
     address_id: str
     postcode_id: str | None = None
-    employer_id: str | None = None
+    employer_id: str
     cif: str | None = None
     is_primary: bool | None = None
     rt: str | None = None
@@ -66,27 +76,32 @@ class AddressRead(BaseModel):
     snapshot_date: date
 
 
-_EMPLOYER_COLUMNS = """
+_EMPLOYER_PROFILE_COLUMNS = """
     employer_id,
     group_id,
     nob_id,
     cif,
-    employer_code,
     employer_name,
+    employer_code,
+    sector,
+    sub_sector,
     industry,
-    primary_telephone,
+    subindustry,
+    group_name,
     primary_email,
-    tiering,
-    is_pks,
-    is_ntb,
+    primary_contact_no,
     snapshot_date
 """
 
-_ACCOUNT_COLUMNS = """
+_EMPLOYER_ACCOUNT_COLUMNS = """
     account_id,
-    employer_id,
     cif,
     branch_code,
+    branch_name,
+    branch_address1,
+    branch_address2,
+    branch_telephone,
+    branch_email,
     account_number,
     currency,
     product_code,
@@ -95,14 +110,19 @@ _ACCOUNT_COLUMNS = """
     snapshot_date
 """
 
-_BRANCH_COLUMNS = """
-    branch_id,
-    branch_code,
-    branch_name,
-    branch_address1,
-    branch_address2,
-    branch_telephone,
-    branch_email,
+_STAKEHOLDER_COLUMNS = """
+    stakeholder_id,
+    employer_id,
+    cif,
+    employer_name,
+    stock_code,
+    group_name,
+    sector,
+    shareholder_type,
+    stakeholder_name,
+    ownership_amount,
+    ownership_percentage,
+    designation,
     snapshot_date
 """
 
@@ -124,167 +144,140 @@ _ADDRESS_COLUMNS = """
 
 
 # ------------------------------------------------------------
-# employer
+# gold_employer_profile
 # ------------------------------------------------------------
-@router.get("/employers", summary="Get all employer")
-async def get_all_employers(client: bigquery.Client = Depends(get_db)) -> list[EmployerRead]:
+@router.get("/employers", summary="Get all employer profiles")
+async def get_all_employers(client: bigquery.Client = Depends(get_db)) -> list[EmployerProfileRead]:
     return await fetch_all(
         client,
         f"""
-        SELECT {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        SELECT {_EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table("gold_employer_profile")}
         ORDER BY employer_name
         """,
-        EmployerRead,
+        EmployerProfileRead,
     )
 
 
-@router.get("/employers/by-name", summary="Get employer by name")
+@router.get("/employers/by-name", summary="Get employer profiles by name")
 async def get_employer_by_name(
     name: str,
     client: bigquery.Client = Depends(get_db),
-) -> list[EmployerRead]:
+) -> list[EmployerProfileRead]:
     query = f"""
-        SELECT {_EMPLOYER_COLUMNS}
-        FROM {qualified_table("employer")}
+        SELECT {_EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table("gold_employer_profile")}
         WHERE LOWER(employer_name) LIKE LOWER(@name)
         ORDER BY employer_name
     """
     params = [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")]
     rows = await run_query(client, query, params)
-    return [EmployerRead(**row) for row in rows]
+    return [EmployerProfileRead(**row) for row in rows]
 
 
-@router.get("/employers/by-account-number", summary="Get employer by account number")
-async def get_employer_by_account_number(
-    account_number: str,
-    client: bigquery.Client = Depends(get_db),
-) -> list[EmployerRead]:
+@router.get("/employers/{cif}", summary="Get employer profile by cif")
+async def get_employer_by_cif(
+    cif: str, client: bigquery.Client = Depends(get_db)
+) -> list[EmployerProfileRead]:
     query = f"""
-        SELECT
-            e.employer_id,
-            e.group_id,
-            e.nob_id,
-            e.cif,
-            e.employer_code,
-            e.employer_name,
-            e.industry,
-            e.primary_telephone,
-            e.primary_email,
-            e.tiering,
-            e.is_pks,
-            e.is_ntb,
-            e.snapshot_date
-        FROM {qualified_table("employer")} e
-        JOIN {qualified_table("employer_account")} a ON a.employer_id = e.employer_id
-        WHERE a.account_number = @account_number
-        ORDER BY e.employer_name
+        SELECT {_EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table("gold_employer_profile")}
+        WHERE cif = @cif
+        ORDER BY employer_name
     """
-    params = [bigquery.ScalarQueryParameter("account_number", "STRING", account_number)]
+    params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
     rows = await run_query(client, query, params)
-    return [EmployerRead(**row) for row in rows]
+    return [EmployerProfileRead(**row) for row in rows]
 
 
 # ------------------------------------------------------------
-# employer_account
+# gold_employer_account
 # ------------------------------------------------------------
-@router.get("/accounts", summary="Get all account")
-async def get_all_accounts(client: bigquery.Client = Depends(get_db)) -> list[AccountRead]:
+@router.get("/accounts", summary="Get all employer accounts")
+async def get_all_accounts(client: bigquery.Client = Depends(get_db)) -> list[EmployerAccountRead]:
     return await fetch_all(
         client,
         f"""
-        SELECT {_ACCOUNT_COLUMNS}
-        FROM {qualified_table("employer_account")}
+        SELECT {_EMPLOYER_ACCOUNT_COLUMNS}
+        FROM {qualified_table("gold_employer_account")}
         ORDER BY account_id
         """,
-        AccountRead,
+        EmployerAccountRead,
     )
 
 
-@router.get("/accounts/by-employer-name", summary="Get all account by employer name")
-async def get_accounts_by_employer_name(
-    name: str,
-    client: bigquery.Client = Depends(get_db),
-) -> list[AccountRead]:
+@router.get("/accounts/{cif}", summary="Get employer accounts by cif")
+async def get_accounts_by_cif(
+    cif: str, client: bigquery.Client = Depends(get_db)
+) -> list[EmployerAccountRead]:
     query = f"""
-        SELECT
-            a.account_id,
-            a.employer_id,
-            a.cif,
-            a.branch_code,
-            a.account_number,
-            a.currency,
-            a.product_code,
-            a.account_type,
-            a.is_sharia,
-            a.snapshot_date
-        FROM {qualified_table("employer_account")} a
-        JOIN {qualified_table("employer")} e ON e.employer_id = a.employer_id
-        WHERE LOWER(e.employer_name) LIKE LOWER(@name)
-        ORDER BY a.account_id
+        SELECT {_EMPLOYER_ACCOUNT_COLUMNS}
+        FROM {qualified_table("gold_employer_account")}
+        WHERE cif = @cif
+        ORDER BY account_id
     """
-    params = [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")]
+    params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
     rows = await run_query(client, query, params)
-    return [AccountRead(**row) for row in rows]
+    return [EmployerAccountRead(**row) for row in rows]
 
 
 # ------------------------------------------------------------
-# branch
+# gold_stakeholder
 # ------------------------------------------------------------
-@router.get("/branches", summary="Get all branch")
-async def get_all_branches(client: bigquery.Client = Depends(get_db)) -> list[BranchRead]:
+@router.get("/stakeholders", summary="Get all stakeholders")
+async def get_all_stakeholders(client: bigquery.Client = Depends(get_db)) -> list[StakeholderRead]:
     return await fetch_all(
         client,
         f"""
-        SELECT {_BRANCH_COLUMNS}
-        FROM {qualified_table("branch")}
-        ORDER BY branch_name
+        SELECT {_STAKEHOLDER_COLUMNS}
+        FROM {qualified_table("gold_stakeholder")}
+        ORDER BY stakeholder_id
         """,
-        BranchRead,
+        StakeholderRead,
     )
 
 
+@router.get("/stakeholders/{cif}", summary="Get stakeholders by cif")
+async def get_stakeholders_by_cif(
+    cif: str, client: bigquery.Client = Depends(get_db)
+) -> list[StakeholderRead]:
+    query = f"""
+        SELECT {_STAKEHOLDER_COLUMNS}
+        FROM {qualified_table("gold_stakeholder")}
+        WHERE cif = @cif
+        ORDER BY stakeholder_id
+    """
+    params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
+    rows = await run_query(client, query, params)
+    return [StakeholderRead(**row) for row in rows]
+
+
 # ------------------------------------------------------------
-# address
+# gold_address
 # ------------------------------------------------------------
-@router.get("/addresses", summary="Get all address")
+@router.get("/addresses", summary="Get all addresses")
 async def get_all_addresses(client: bigquery.Client = Depends(get_db)) -> list[AddressRead]:
     return await fetch_all(
         client,
         f"""
         SELECT {_ADDRESS_COLUMNS}
-        FROM {qualified_table("address")}
+        FROM {qualified_table("gold_address")}
         ORDER BY employer_id, is_primary DESC
         """,
         AddressRead,
     )
 
 
-@router.get("/addresses/by-name", summary="Get all employer address by name")
-async def get_addresses_by_employer_name(
-    name: str,
-    client: bigquery.Client = Depends(get_db),
+@router.get("/addresses/{cif}", summary="Get addresses by cif")
+async def get_addresses_by_cif(
+    cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[AddressRead]:
     query = f"""
-        SELECT
-            ad.address_id,
-            ad.postcode_id,
-            ad.employer_id,
-            ad.cif,
-            ad.is_primary,
-            ad.rt,
-            ad.rw,
-            ad.address_detail,
-            ad.subdistrict,
-            ad.district,
-            ad.city,
-            ad.province,
-            ad.snapshot_date
-        FROM {qualified_table("address")} ad
-        JOIN {qualified_table("employer")} e ON e.employer_id = ad.employer_id
-        WHERE LOWER(e.employer_name) LIKE LOWER(@name)
-        ORDER BY ad.employer_id, ad.is_primary DESC
+        SELECT {_ADDRESS_COLUMNS}
+        FROM {qualified_table("gold_address")}
+        WHERE cif = @cif
+        ORDER BY is_primary DESC
     """
-    params = [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")]
+    params = [bigquery.ScalarQueryParameter("cif", "STRING", cif)]
     rows = await run_query(client, query, params)
     return [AddressRead(**row) for row in rows]

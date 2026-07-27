@@ -7,12 +7,11 @@ from app.schemas.emergency_contact import EmergencyContactRead
 
 router = APIRouter()
 
-
 @router.get("/", summary="Get all emergency contact data")
 async def get_all_emergency_contact(client: bigquery.Client = Depends(get_db)) -> list[EmergencyContactRead]:
     return await fetch_all(
         client,
-        f"""
+        f"""    
         SELECT
             emer_cont_id,
             master_code,

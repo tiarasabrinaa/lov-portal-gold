@@ -10,10 +10,9 @@ class EmployerProfileRead(BaseModel):
     cif: str
     employer_name: str
     employer_code: str | None = None
-    sector: str | None = None
-    sub_sector: str | None = None
     industry: str | None = None
-    subindustry: str | None = None
+    tiering_code: str | None = None
+    tiering_label: str | None = None
     group_name: str | None = None
     primary_email: str | None = None
     primary_contact_no: str | None = None
@@ -29,8 +28,11 @@ class PaginatedEmployers(BaseModel):
 
 class EmployerAccountRead(BaseModel):
     account_id: str
-    employer_id: str | None = None
     cif: str | None = None
+    employer_id: str | None = None
+    employer_name: str | None = None
+    group_id: str | None = None
+    group_name: str | None = None
     branch_code: str | None = None
     branch_name: str | None = None
     branch_address1: str | None = None
@@ -47,12 +49,13 @@ class EmployerAccountRead(BaseModel):
 
 class StakeholderRead(BaseModel):
     stakeholder_id: str
-    employer_id: str
     cif: str | None = None
+    employer_id: str
     employer_name: str | None = None
-    stock_code: str | None = None
+    group_id: str | None = None
     group_name: str | None = None
-    sector: str | None = None
+    stock_code: str | None = None
+    industry: str | None = None
     shareholder_type: str | None = None
     stakeholder_name: str | None = None
     ownership_amount: float | None = None
@@ -63,9 +66,10 @@ class StakeholderRead(BaseModel):
 
 class AddressRead(BaseModel):
     address_id: str
-    postcode_id: str | None = None
     employer_id: str
     cif: str | None = None
+    postcode_id: str | None = None
+    postcode: str | None = None
     is_primary: bool | None = None
     rt: str | None = None
     rw: str | None = None

@@ -46,6 +46,30 @@
 -- sector/sub_sector/subindustry yang sempat muncul di draft DML
 -- dihapus (DDL cuma punya 1 kolom klasifikasi industri: `industry`),
 -- data dummy jadi masuk ke kolom industry itu aja.
+--
+-- Update 2026-07-28 (lanjutan) - app/api & app/schemas disinkronin ke
+-- skema final ini:
+-- - gold_employer_profile: sector/sub_sector/subindustry DIHAPUS dari
+--   kode (udah ga ada di DDL), tiering_code & tiering_label DITAMBAH
+--   (masih NULL semua di DML, belum ada sumber data buat backfill).
+-- - gold_employer_account: employer_name/group_id/group_name
+--   DITAMBAH ke kode (didenormalisasi, tapi DML belum ngisi value-nya
+--   jadi masih NULL - PR selanjutnya kalau mau di-backfill dari join
+--   ke gold_employer_profile by employer_id).
+-- - gold_stakeholder: sector DIHAPUS dari kode, diganti industry
+--   (data lama sector udah dipindah manual ke industry di DML),
+--   group_id DITAMBAH (masih NULL, belum di-backfill).
+-- - gold_address: postcode DITAMBAH (masih NULL, DML cuma ngisi
+--   postcode_id).
+-- - Ketemu bug URL collision: endpoint by-employer-id di company.py
+--   sempat dipakein path /employer/{employer_id} (single segment),
+--   yang BENTROK sama /employer/{cif} di company_cif.py (sama-sama
+--   1 segment dinamis di bawah /employer). company_router didaftar
+--   duluan di router.py jadi selalu menang -> lookup by-cif via
+--   /employer/{cif} diam-diam kepanggil sebagai by-employer_id dan
+--   selalu kosong. Fix: path by-employer-id dibalikin pakai prefix
+--   eksplisit /employer/by-employer-id/{employer_id} (juga buat
+--   account/stakeholder/address), /employer/{cif} dkk tetap plain.
 -- ============================================================
 
 CREATE SCHEMA IF NOT EXISTS `lov_gold`;

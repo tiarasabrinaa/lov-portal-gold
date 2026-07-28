@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 _REDIS_TIMEOUT_SECONDS = 1.0
 
 
-    @lru_cache
+@lru_cache
 def get_redis_client() -> redis.Redis:
     return redis.Redis(
         host=settings.redis_host,

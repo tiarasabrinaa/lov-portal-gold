@@ -13,7 +13,7 @@ from app.schemas.company import AddressRead, EmployerAccountRead, EmployerProfil
 router = APIRouter()
 
 
-@router.get("/employers/{cif}", summary="Get employer profile by cif")
+@router.get("/employer/{cif}", summary="Get employer profile by cif")
 async def get_employer_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerProfileRead]:
@@ -22,7 +22,7 @@ async def get_employer_by_cif(
     return [EmployerProfileRead(**row) for row in matches]
 
 
-@router.get("/accounts/{cif}", summary="Get employer accounts by cif")
+@router.get("/account/{cif}", summary="Get employer accounts by cif")
 async def get_accounts_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerAccountRead]:
@@ -37,7 +37,7 @@ async def get_accounts_by_cif(
     return [EmployerAccountRead(**row) for row in rows]
 
 
-@router.get("/stakeholders/{cif}", summary="Get stakeholders by cif")
+@router.get("/stakeholder/{cif}", summary="Get stakeholders by cif")
 async def get_stakeholders_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[StakeholderRead]:
@@ -52,7 +52,7 @@ async def get_stakeholders_by_cif(
     return [StakeholderRead(**row) for row in rows]
 
 
-@router.get("/addresses/{cif}", summary="Get addresses by cif")
+@router.get("/address/{cif}", summary="Get addresses by cif")
 async def get_addresses_by_cif(
     cif: str, client: bigquery.Client = Depends(get_db)
 ) -> list[AddressRead]:

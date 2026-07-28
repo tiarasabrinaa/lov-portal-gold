@@ -19,7 +19,7 @@ api_router.include_router(company_router, prefix="/company", tags=["company"])
 # company_cif_router (endpoint /{cif}) HARUS didaftarin SETELAH company_router -
 # supaya path statis kayak /company/employers/by-name & /by-employer-id/{id}
 # ke-match duluan, bukan ketangkep sama {cif} yang sifatnya catch-all.
-api_router.include_router(company_cif_router, prefix="/company", tags=["company"])
+api_router.include_router(company_cif_router, prefix="/company", tags=["company_cif"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(post_code_router, prefix="/post-codes", tags=["post-code"])
 api_router.include_router(group_router, prefix="/groups", tags=["group"])

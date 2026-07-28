@@ -50,7 +50,7 @@ async def get_all_employers(
 
 
 @router.get(
-    "/employers/by-name",
+    "/employer/by-name",
     summary="Get employer profiles by name (substring, case-insensitive, paginated)",
 )
 async def get_employer_by_name(
@@ -65,7 +65,7 @@ async def get_employer_by_name(
     return _paginate(matches, page, page_size)
 
 
-@router.get("/employers/by-employer-id/{employer_id}", summary="Get employer profile by employer_id")
+@router.get("/employer/{employer_id}", summary="Get employer profile by employer_id")
 async def get_employer_by_employer_id(
     employer_id: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerProfileRead]:
@@ -90,7 +90,7 @@ async def get_all_accounts(client: bigquery.Client = Depends(get_db)) -> list[Em
     )
 
 
-@router.get("/accounts/by-employer-id/{employer_id}", summary="Get employer accounts by employer_id")
+@router.get("/account/{employer_id}", summary="Get employer accounts by employer_id")
 async def get_accounts_by_employer_id(
     employer_id: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerAccountRead]:
@@ -121,7 +121,7 @@ async def get_all_stakeholders(client: bigquery.Client = Depends(get_db)) -> lis
     )
 
 
-@router.get("/stakeholders/by-employer-id/{employer_id}", summary="Get stakeholders by employer_id")
+@router.get("/stakeholder/{employer_id}", summary="Get stakeholders by employer_id")
 async def get_stakeholders_by_employer_id(
     employer_id: str, client: bigquery.Client = Depends(get_db)
 ) -> list[StakeholderRead]:
@@ -152,7 +152,7 @@ async def get_all_addresses(client: bigquery.Client = Depends(get_db)) -> list[A
     )
 
 
-@router.get("/addresses/by-employer-id/{employer_id}", summary="Get addresses by employer_id")
+@router.get("/address/{employer_id}", summary="Get addresses by employer_id")
 async def get_addresses_by_employer_id(
     employer_id: str, client: bigquery.Client = Depends(get_db)
 ) -> list[AddressRead]:

@@ -1,6 +1,3 @@
-lov_gold company (atwork design) - v3 ddl dml
-
-Company lov_gold v3 (redesign dari dummy/design-gold-company-atwork.png, versi terbaru) · SQL
 -- ============================================================
 -- COMPANY lov_GOLD (v3 / "atwork" design) - BigQuery Standard SQL
 -- Dataset: lov_gold
@@ -24,9 +21,6 @@ Company lov_gold v3 (redesign dari dummy/design-gold-company-atwork.png, versi t
 --   deskriptif/referensi tapi API-nya standar ke by-cif.
 -- - stakeholder (gold_stakeholder) baru ada di desain ini - belum
 --   ada sama sekali di v2.
--- - employer_profile v3 lebih kaya field-nya (sector, sub_sector,
---   industry, subindustry, group_name) dibanding employer v2 yang
---   cuma industry.
 --
 -- Catatan asumsi (ga eksplisit kelihatan di gambar ERD, cek balik):
 -- - snapshot_date ditambahin di gold_employer_account & gold_address
@@ -45,6 +39,13 @@ Company lov_gold v3 (redesign dari dummy/design-gold-company-atwork.png, versi t
 -- supaya endpoint /accounts/by-employer-id/{employer_id} bisa query
 -- langsung tanpa resolve cif dulu, dan FK formal employer_id->employer_id
 -- sekarang valid (match PRIMARY KEY gold_employer_profile).
+--
+-- Update 2026-07-28: fix bug di gold_stakeholder DDL (kolom group_id
+-- tadinya ga diakhiri koma -> syntax error, dan group_name kepasang
+-- 2x -> duplicate column error). DML disamain ke DDL yang ada: kolom
+-- sector/sub_sector/subindustry yang sempat muncul di draft DML
+-- dihapus (DDL cuma punya 1 kolom klasifikasi industri: `industry`),
+-- data dummy jadi masuk ke kolom industry itu aja.
 -- ============================================================
 
 CREATE SCHEMA IF NOT EXISTS `lov_gold`;
@@ -59,10 +60,9 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
   cif                  STRING  NOT NULL,
   employer_name        STRING  NOT NULL,
   employer_code        STRING,
-  sector               STRING,
-  sub_sector           STRING,
   industry             STRING,
-  subindustry          STRING,
+  tiering_code         STRING,
+  tiering_label        STRING,
   group_name           STRING,
   primary_email        STRING,
   primary_contact_no   STRING,
@@ -75,8 +75,11 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
   account_id        STRING  NOT NULL,
-  employer_id       STRING,
   cif               STRING,
+  employer_id       STRING,
+  employer_name     STRING,
+  group_id          STRING,
+  group_name        STRING,
   branch_code       STRING,
   branch_name       STRING,
   branch_address1   STRING,
@@ -103,12 +106,13 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.gold_stakeholder` (
   stakeholder_id        STRING  NOT NULL,
-  employer_id           STRING  NOT NULL,
   cif                   STRING,
+  employer_id           STRING  NOT NULL,
   employer_name         STRING,
-  stock_code            STRING,
+  group_id              STRING,
   group_name            STRING,
-  sector                STRING,
+  stock_code            STRING,
+  industry              STRING,
   shareholder_type      STRING,
   stakeholder_name      STRING,
   ownership_amount      NUMERIC,
@@ -124,9 +128,10 @@ CREATE OR REPLACE TABLE `lov_gold.gold_stakeholder` (
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.gold_address` (
   address_id      STRING  NOT NULL,
-  postcode_id     STRING,
   employer_id     STRING  NOT NULL,
   cif             STRING,
+  postcode_id     STRING,
+  postcode        STRING,
   is_primary      BOOL,
   rt              STRING,
   rw              STRING,
@@ -147,28 +152,23 @@ CREATE OR REPLACE TABLE `lov_gold.gold_address` (
 
 -- 1. gold_employer_profile
 INSERT INTO `lov_gold.gold_employer_profile`
-(employer_id, group_id, nob_id, cif, employer_name, employer_code, sector, sub_sector,
- industry, subindustry, group_name, primary_email, primary_contact_no, snapshot_date)
+(employer_id, group_id, nob_id, cif, employer_name, employer_code,
+ industry, group_name, primary_email, primary_contact_no, snapshot_date)
 VALUES
 ('EMP001','GRP001','NOB01','1000000001','PT Sinar Abadi Sejahtera Tbk','EC00001',
- 'Jasa Keuangan','Perbankan','Bank Umum','Bank Devisa','Sinar Group',
- 'info@sinarabadi.co.id','021-5551234', DATE '2026-07-24'),
+ 'Bank Umum','Sinar Group','info@sinarabadi.co.id','021-5551234', DATE '2026-07-24'),
 
 ('EMP002','GRP002','NOB02','1000000002','PT Maju Jaya Makmur','EC00002',
- 'Perdagangan','Perdagangan Besar','Distribusi','Distribusi Barang Konsumsi','Maju Group',
- 'contact@majujaya.co.id','031-5559876', DATE '2026-07-24'),
+ 'Distribusi','Maju Group','contact@majujaya.co.id','031-5559876', DATE '2026-07-24'),
 
 ('EMP003','GRP003','NOB03','1000000003','PT Cahaya Nusantara Tbk','EC00003',
- 'Konstruksi','Konstruksi Gedung','Konstruksi Bangunan Komersial', NULL,'Cahaya Group',
- 'cs@cahayanusantara.co.id','022-5551122', DATE '2026-07-24'),
+ 'Konstruksi Bangunan Komersial','Cahaya Group','cs@cahayanusantara.co.id','022-5551122', DATE '2026-07-24'),
 
 ('EMP004','GRP004','NOB04','1000000004','PT Bumi Perkasa Mandiri','EC00004',
- 'Manufaktur','Industri Makanan','Pengolahan Makanan','Makanan Olahan','Bumi Group',
- 'info@bumiperkasa.co.id','061-5552468', DATE '2026-07-24'),
+ 'Pengolahan Makanan','Bumi Group','info@bumiperkasa.co.id','061-5552468', DATE '2026-07-24'),
 
 ('EMP005','GRP005','NOB05','1000000005','PT Karya Utama Sentosa','EC00005',
- 'Pertanian','Perkebunan','Perkebunan Kelapa Sawit', NULL,'Karya Group',
- 'admin@karyautama.co.id','024-5553579', DATE '2026-07-24');
+ 'Perkebunan Kelapa Sawit','Karya Group','admin@karyautama.co.id','024-5553579', DATE '2026-07-24');
 
 
 -- 2. gold_employer_account (6 baris — EMP001 punya 2 account)
@@ -198,8 +198,8 @@ VALUES
 
 -- 3. gold_stakeholder (8 baris)
 INSERT INTO `lov_gold.gold_stakeholder`
-(stakeholder_id, employer_id, cif, employer_name, stock_code, group_name, sector,
- shareholder_type, stakeholder_name, ownership_amount, ownership_percentage, designation, snapshot_date)
+(stakeholder_id, employer_id, cif, employer_name, stock_code, group_name,
+ industry, shareholder_type, stakeholder_name, ownership_amount, ownership_percentage, designation, snapshot_date)
 VALUES
 ('SH001','EMP001','1000000001','PT Sinar Abadi Sejahtera Tbk','SNRA','Sinar Group','Jasa Keuangan','Individual','Budi Santoso', 550000000000, 55.00, 'Pemegang Saham Utama', DATE '2026-07-24'),
 ('SH002','EMP001','1000000001','PT Sinar Abadi Sejahtera Tbk','SNRA','Sinar Group','Jasa Keuangan','Corporate','PT Modal Investama', 450000000000, 45.00, 'Pemegang Saham', DATE '2026-07-24'),
@@ -264,7 +264,7 @@ GROUP BY employer_id
 HAVING COUNT(*) != 1;
 
 -- 3. Contoh query self-service tanpa join (semua entity punya cif sendiri)
-SELECT employer_name, industry, sector, primary_email, cif
+SELECT employer_name, industry, primary_email, cif
 FROM `lov_gold.gold_employer_profile`;
 
 SELECT account_number, branch_name, account_type, cif

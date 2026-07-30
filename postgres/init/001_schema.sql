@@ -9,6 +9,11 @@
 -- harus di-update biar sync job ga gagal insert.
 -- ============================================================
 
+-- pg_trgm: perlu buat index trigram di bawah, biar `WHERE employer_name
+-- ILIKE '%kata%'` (search dgn wildcard di depan) tetep kepakein index -
+-- btree biasa GA BISA dipakai buat leading-wildcard LIKE/ILIKE.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE IF NOT EXISTS gold_employer_profile (
   employer_id          TEXT PRIMARY KEY,
   group_id             TEXT,
@@ -24,6 +29,14 @@ CREATE TABLE IF NOT EXISTS gold_employer_profile (
   primary_contact_no   TEXT,
   snapshot_date        DATE NOT NULL
 );
+
+-- Index buat cif (lookup by-cif) dan employer_name (sort/pagination +
+-- search). Trigram index khusus employer_name biar ILIKE '%kata%' tetep
+-- cepet meski tabelnya udah ratusan ribu/jutaan baris.
+CREATE INDEX IF NOT EXISTS idx_employer_profile_cif ON gold_employer_profile (cif);
+CREATE INDEX IF NOT EXISTS idx_employer_profile_name_btree ON gold_employer_profile (employer_name);
+CREATE INDEX IF NOT EXISTS idx_employer_profile_name_trgm
+  ON gold_employer_profile USING gin (employer_name gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS gold_employer_account (
   account_id                       TEXT PRIMARY KEY,

@@ -35,8 +35,10 @@ class EmployerAccountRead(BaseModel):
     group_name: str | None = None
     branch_code: str | None = None
     branch_name: str | None = None
-    branch_address1: str | None = None
-    branch_address2: str | None = None
+    branch_detail: str | None = None
+    branch_subdistrict_district: str | None = None
+    branch_city: str | None = None
+    branch_province: str | None = None
     branch_telephone: str | None = None
     branch_email: str | None = None
     account_number: str | None = None

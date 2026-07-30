@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     redis_db: int = 0
     cache_ttl_seconds: int = 60
 
+    # Postgres (transactional store, disinkronin dari BigQuery via sync job bulanan)
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "lov_gold"
+    postgres_user: str = "lov_app"
+    postgres_password: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

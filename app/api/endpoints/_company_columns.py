@@ -1,7 +1,5 @@
-from google.cloud import bigquery
-
 from app.core.cache import get_cached_rows
-from app.core.database import qualified_table
+from app.core.postgres import run_pg_query
 
 EMPLOYERS_CACHE_KEY = "lov:company:employers:all"
 
@@ -39,7 +37,6 @@ EMPLOYER_ACCOUNT_COLUMNS = """
     account_number,
     currency,
     product_code,
-    account_type,
     is_sharia,
     snapshot_date
 """
@@ -79,18 +76,18 @@ ADDRESS_COLUMNS = """
 """
 
 
-async def get_all_employer_rows(client: bigquery.Client) -> list[dict]:
-    """Full gold_employer_profile list, Redis-cached (TTL settings.cache_ttl_seconds).
+async def get_all_employer_rows() -> list[dict]:
+    """Full gold_employer_profile list dari Postgres, Redis-cached (TTL settings.cache_ttl_seconds).
 
     Dipakai bareng oleh company.py (all/by-name/by-employer-id) dan
-    company_cif.py (by-cif) supaya cache-nya satu, ga duplikat hit BigQuery.
+    company_cif.py (by-cif) supaya cache-nya satu, ga duplikat hit Postgres.
+    Postgres sendiri disinkronin dari BigQuery lewat
+    scripts/sync_bigquery_to_postgres.py (full refresh, terjadwal bulanan).
     """
-    return await get_cached_rows(
-        EMPLOYERS_CACHE_KEY,
-        client,
-        f"""
-        SELECT {EMPLOYER_PROFILE_COLUMNS}
-        FROM {qualified_table("gold_employer_profile")}
-        ORDER BY employer_name
-        """,
-    )
+
+    async def _fetch() -> list[dict]:
+        return await run_pg_query(
+            f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM gold_employer_profile ORDER BY employer_name"
+        )
+
+    return await get_cached_rows(EMPLOYERS_CACHE_KEY, _fetch)

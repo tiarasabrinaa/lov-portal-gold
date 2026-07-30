@@ -44,7 +44,6 @@ class EmployerAccountRead(BaseModel):
     account_number: str | None = None
     currency: str | None = None
     product_code: str | None = None
-    account_type: str | None = None
     is_sharia: bool | None = None
     snapshot_date: date
 

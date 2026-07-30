@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
+from typing import TypeVar
 
 import redis.asyncio as redis
 
@@ -35,11 +36,14 @@ def _json_default(value: object) -> str | float:
     raise TypeError(f"Not JSON serializable: {value!r}")
 
 
+T = TypeVar("T")
+
+
 async def get_cached_rows(
     cache_key: str,
-    fetch: Callable[[], Awaitable[list[dict]]],
-) -> list[dict]:
-    """Return rows from Redis if cached, otherwise call `fetch` and cache the result.
+    fetch: Callable[[], Awaitable[T]],
+) -> T:
+    """Return a JSON-serializable value from Redis if cached, otherwise call `fetch` and cache it.
 
     Sengaja ga terikat ke sumber data manapun (BigQuery/Postgres/dll) -
     caller yang nentuin gimana caranya ambil data lewat `fetch`. Redis di

@@ -1,8 +1,6 @@
 from app.core.cache import get_cached_rows
 from app.core.postgres import run_pg_query
 
-EMPLOYERS_CACHE_KEY = "lov:company:employers:all"
-
 EMPLOYER_PROFILE_COLUMNS = """
     employer_id,
     group_id,
@@ -76,18 +74,64 @@ ADDRESS_COLUMNS = """
 """
 
 
-async def get_all_employer_rows() -> list[dict]:
-    """Full gold_employer_profile list dari Postgres, Redis-cached (TTL settings.cache_ttl_seconds).
+async def get_employer_page(name: str | None, page: int, page_size: int) -> tuple[list[dict], int]:
+    """Query 1 halaman gold_employer_profile langsung dari Postgres (LIMIT/OFFSET di SQL,
+    bukan tarik semua baris terus dipotong di Python - itu yang bikin lemot di 800rb baris).
 
-    Dipakai bareng oleh company.py (all/by-name/by-employer-id) dan
-    company_cif.py (by-cif) supaya cache-nya satu, ga duplikat hit Postgres.
-    Postgres sendiri disinkronin dari BigQuery lewat
-    scripts/sync_bigquery_to_postgres.py (full refresh, terjadwal bulanan).
+    Cache-nya PER KOMBINASI (name, page, page_size) - bukan 1 cache buat seluruh tabel -
+    jadi tiap entry cache-nya kecil (cuma segede 1 halaman), bukan ratusan MB.
     """
+    cache_key = f"lov:company:employers:name={name or ''}:page={page}:size={page_size}"
+
+    async def _fetch() -> dict:
+        where_clause = ""
+        where_params: list = []
+        if name:
+            where_clause = "WHERE employer_name ILIKE %s"
+            where_params.append(f"%{name}%")
+
+        count_rows = await run_pg_query(
+            f"SELECT COUNT(*) AS total FROM gold_employer_profile {where_clause}",
+            tuple(where_params),
+        )
+        total = count_rows[0]["total"]
+
+        offset = (page - 1) * page_size
+        rows = await run_pg_query(
+            f"""
+            SELECT {EMPLOYER_PROFILE_COLUMNS}
+            FROM gold_employer_profile
+            {where_clause}
+            ORDER BY employer_name
+            LIMIT %s OFFSET %s
+            """,
+            tuple(where_params + [page_size, offset]),
+        )
+        return {"rows": rows, "total": total}
+
+    result = await get_cached_rows(cache_key, _fetch)
+    return result["rows"], result["total"]
+
+
+async def get_employer_by_cif(cif: str) -> list[dict]:
+    cache_key = f"lov:company:employer:cif={cif}"
 
     async def _fetch() -> list[dict]:
         return await run_pg_query(
-            f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM gold_employer_profile ORDER BY employer_name"
+            f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM gold_employer_profile WHERE cif = %s",
+            (cif,),
         )
 
-    return await get_cached_rows(EMPLOYERS_CACHE_KEY, _fetch)
+    return await get_cached_rows(cache_key, _fetch)
+
+
+async def get_employer_by_employer_id(employer_id: str) -> list[dict]:
+    cache_key = f"lov:company:employer:employer_id={employer_id}"
+
+    async def _fetch() -> list[dict]:
+        return await run_pg_query(
+            f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM gold_employer_profile WHERE employer_id = %s",
+            (employer_id,),
+        )
+
+    return await get_cached_rows(cache_key, _fetch)

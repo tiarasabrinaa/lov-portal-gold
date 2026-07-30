@@ -4,7 +4,7 @@ from app.api.endpoints._company_columns import (
     ADDRESS_COLUMNS,
     EMPLOYER_ACCOUNT_COLUMNS,
     STAKEHOLDER_COLUMNS,
-    get_all_employer_rows,
+    get_employer_by_cif as pg_get_employer_by_cif,
 )
 from app.core.postgres import run_pg_query
 from app.schemas.company import AddressRead, EmployerAccountRead, EmployerProfileRead, StakeholderRead
@@ -14,9 +14,8 @@ router = APIRouter()
 
 @router.get("/employer/{cif}", summary="Get employer profile by cif")
 async def get_employer_by_cif(cif: str) -> list[EmployerProfileRead]:
-    rows = await get_all_employer_rows()
-    matches = [row for row in rows if row["cif"] == cif]
-    return [EmployerProfileRead(**row) for row in matches]
+    rows = await pg_get_employer_by_cif(cif)
+    return [EmployerProfileRead(**row) for row in rows]
 
 
 @router.get("/account/{cif}", summary="Get employer accounts by cif")

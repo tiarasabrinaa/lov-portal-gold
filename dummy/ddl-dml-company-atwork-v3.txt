@@ -98,22 +98,23 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
 -- 2. gold_employer_account (branch_* didenormalisasi di sini)
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.gold_employer_account` (
-  account_id        STRING  NOT NULL,
-  cif               STRING,
-  employer_id       STRING,
-  employer_name     STRING,
-  group_id          STRING,
-  group_name        STRING,
-  branch_code       STRING,
-  branch_name       STRING,
-  branch_address1   STRING,
-  branch_address2   STRING,
-  branch_telephone  STRING,
-  branch_email      STRING,
-  account_number    STRING,
-  currency          STRING,
-  product_code      STRING,
-  account_type      STRING,   -- is_giro: 'GIRO' | 'DEPOSITO' | dst.
+  account_id                        STRING  NOT NULL,
+  cif                               STRING,
+  employer_id                       STRING,
+  employer_name                     STRING,
+  group_id                          STRING,
+  group_name                        STRING,
+  branch_code                       STRING,
+  branch_name                       STRING,
+  branch_address_detail             STRING,
+  branch_address_village_district   STRING,
+  branch_address_city               STRING,
+  branch_address_province           STRING,
+  branch_telephone                  STRING,
+  branch_email                      STRING,
+  account_number                    STRING,
+  currency                          STRING,
+  product_code                      STRING,
   is_sharia         BOOL,
   snapshot_date     DATE    NOT NULL,
   PRIMARY KEY (account_id) NOT ENFORCED,
@@ -197,26 +198,26 @@ VALUES
 
 -- 2. gold_employer_account (6 baris — EMP001 punya 2 account)
 INSERT INTO `lov_gold.gold_employer_account`
-(account_id, employer_id, cif, branch_code, branch_name, branch_address1, branch_address2,
+(account_id, employer_id, cif, branch_code, branch_name, branch_address_detail, branch_address_village_district, branch_address_city, branch_address_province,
  branch_telephone, branch_email, account_number, currency, product_code,
  account_type, is_sharia, snapshot_date)
 VALUES
-('ACC001','EMP001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+('ACC001','EMP001','1000000001','BR001','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '021-5701234','cabang.sudirman@banksample.co.id','1234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC002','EMP001','1000000001','BR001','Cabang Jakarta Sudirman','Jl. Jenderal Sudirman Kav. 20','Lantai 1',
+('ACC002','EMP001','1000000001','BR001','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '021-5701234','cabang.sudirman@banksample.co.id','1234567891','IDR','DEP01','DEPOSITO', FALSE, DATE '2026-07-24'),
 
-('ACC003','EMP002','1000000002','BR002','Cabang Surabaya Basuki Rahmat','Jl. Basuki Rahmat No. 100','Lantai 2',
+('ACC003','EMP002','1000000002','BR002','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '031-5709876','cabang.surabaya@banksample.co.id','2234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC004','EMP003','1000000003','BR003','Cabang Bandung Asia Afrika','Jl. Asia Afrika No. 50', NULL,
+('ACC004','EMP003','1000000003','BR003','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '022-5701122','cabang.bandung@banksample.co.id','3234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24'),
 
-('ACC005','EMP004','1000000004','BR004','Cabang Medan Syariah','Jl. Gatot Subroto No. 20', NULL,
+('ACC005','EMP004','1000000004','BR004','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '061-5702468','cabang.medansyariah@banksample.co.id','4234567890','IDR','GIRO01','GIRO', TRUE, DATE '2026-07-24'),
 
-('ACC006','EMP005','1000000005','BR005','Cabang Semarang Pandanaran','Jl. Pandanaran No. 40', NULL,
+('ACC006','EMP005','1000000005','BR005','Jl. Jenderal Sudirman Kav. 20','Blok M','Jakarta Selatan','DKI Jakarta',
  '024-5703579','cabang.semarang@banksample.co.id','5234567890','IDR','GIRO01','GIRO', FALSE, DATE '2026-07-24');
 
 

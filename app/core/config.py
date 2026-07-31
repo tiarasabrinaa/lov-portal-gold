@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_password: str | None = None
     cache_ttl_seconds: int = 60
 
     # Postgres (transactional store, disinkronin dari BigQuery via sync job bulanan)

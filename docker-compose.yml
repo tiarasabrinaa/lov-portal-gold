@@ -10,6 +10,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/sandbox-lov-760ab321486a.json
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: lov_redis_local_only
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: lov_gold
@@ -28,6 +29,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lov-portal-redis
+    command: redis-server --requirepass lov_redis_local_only
     ports:
       - "6379:6379"
 

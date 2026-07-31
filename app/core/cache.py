@@ -22,6 +22,7 @@ def get_redis_client() -> redis.Redis:
         host=settings.redis_host,
         port=settings.redis_port,
         db=settings.redis_db,
+        password=settings.redis_password,
         decode_responses=True,
         socket_connect_timeout=_REDIS_TIMEOUT_SECONDS,
         socket_timeout=_REDIS_TIMEOUT_SECONDS,

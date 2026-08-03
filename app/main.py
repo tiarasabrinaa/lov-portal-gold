@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from google.api_core.exceptions import GoogleAPIError
 
 from app.api.router import api_router
 
@@ -22,6 +24,11 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/lov/v1")
+
+
+@app.exception_handler(GoogleAPIError)
+async def handle_bigquery_error(request: Request, exc: GoogleAPIError) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": f"Gagal ambil data dari BigQuery: {exc}"})
 
 
 @app.get("/", tags=["root"])

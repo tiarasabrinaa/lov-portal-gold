@@ -1,3 +1,5 @@
+import time
+
 from google.cloud import bigquery
 
 from app.core.cache import get_cached_rows
@@ -87,6 +89,7 @@ async def get_employer_page(
     page/page_size udah divalidasi jadi int sama FastAPI Query(ge=..., le=...) di router,
     aman diinterpolasi langsung ke LIMIT/OFFSET tanpa perlu parameter.
     """
+    start_time = time.time()
     cache_key = f"lov:company:employers:name={name or ''}:page={page}:size={page_size}"
 
     async def _fetch() -> dict:
@@ -117,6 +120,9 @@ async def get_employer_page(
         )
         return {"rows": rows, "total": total}
 
+    end_time = time.time() - start_time
+    print(f"get_employer_page took {end_time:.8f} seconds")
+
     result = await get_cached_rows(cache_key, _fetch)
     return result["rows"], result["total"]
 
@@ -136,7 +142,7 @@ async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:
 
 async def get_employer_by_employer_id(client: bigquery.Client, employer_id: str) -> list[dict]:
     cache_key = f"lov:company:employer:employer_id={employer_id}"
-
+    start_time = time.time()
     async def _fetch() -> list[dict]:
         return await run_query(
             client,
@@ -147,5 +153,7 @@ async def get_employer_by_employer_id(client: bigquery.Client, employer_id: str)
             """,
             [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)],
         )
+    end_time = time.time() - start_time
+    print(f"get_employer_by_employer_id took {end_time:.8f} seconds")
 
     return await get_cached_rows(cache_key, _fetch)

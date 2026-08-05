@@ -89,7 +89,6 @@ async def get_employer_page(
     page/page_size udah divalidasi jadi int sama FastAPI Query(ge=..., le=...) di router,
     aman diinterpolasi langsung ke LIMIT/OFFSET tanpa perlu parameter.
     """
-    start_time = time.time()
     cache_key = f"lov:company:employers:name={name or ''}:page={page}:size={page_size}"
 
     async def _fetch() -> dict:
@@ -120,12 +119,23 @@ async def get_employer_page(
         )
         return {"rows": rows, "total": total}
 
-    end_time = time.time() - start_time
-    print(f"get_employer_page took {end_time:.8f} seconds")
-
     result = await get_cached_rows(cache_key, _fetch)
     return result["rows"], result["total"]
 
+
+async def search_employers_by_name(client: bigquery.Client, name: str) -> list[dict]:
+    """Pure BigQuery, no Redis cache - BQ sudah punya caching sendiri per service account."""
+    rows = await run_query(
+        client,
+        f"""
+        SELECT {EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table('gold_employer_profile')}
+        WHERE LOWER(employer_name) LIKE LOWER(@name)
+        ORDER BY employer_name
+        """,
+        [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")],
+    )
+    return rows
 
 async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:
     cache_key = f"lov:company:employer:cif={cif}"

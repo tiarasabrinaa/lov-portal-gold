@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from google.api_core.exceptions import GoogleAPIError
 
-from app.api.router import api_router
+from app.api.router import api_router, api_router_v2
 
 app = FastAPI(
     title="LOV Portal API",
@@ -35,6 +35,7 @@ async def log_request_time(request: Request, call_next):
 
 
 app.include_router(api_router, prefix="/lov/v1")
+app.include_router(api_router_v2, prefix="/lov/v2")
 
 
 @app.exception_handler(GoogleAPIError)

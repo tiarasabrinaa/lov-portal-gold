@@ -2,6 +2,8 @@ from fastapi import APIRouter
 
 from app.api.endpoints.company import router as company_router
 from app.api.endpoints.company_cif import router as company_cif_router
+from app.api.endpoints.company_cif_v2 import router as company_cif_v2_router
+from app.api.endpoints.company_v2 import router as company_v2_router
 from app.api.endpoints.education import router as education_router
 from app.api.endpoints.emergency_contact import router as emergency_contact_router
 from app.api.endpoints.group import router as group_router
@@ -29,3 +31,16 @@ api_router.include_router(emergency_contact_router, prefix="/emergency-contacts"
 api_router.include_router(education_router, prefix="/educations", tags=["education"])
 api_router.include_router(occupation_router, prefix="/occupations", tags=["occupation"])
 api_router.include_router(nature_of_business_router, prefix="/nature-of-businesses", tags=["nature-of-business"])
+
+
+# ------------------------------------------------------------
+# v2: pure BigQuery, no Redis/Postgres - buat banding-bandingin sama v1
+# (BigQuery + Redis cache) di company.py/company_cif.py. Mounted terpisah
+# di /lov/v2 lewat app.main, router ini cuma isi company + company_cif
+# soalnya cuma itu yang punya varian cached (v1) vs pure (v2).
+# ------------------------------------------------------------
+api_router_v2 = APIRouter()
+api_router_v2.include_router(company_v2_router, prefix="/company", tags=["company_v2"])
+# company_cif_v2_router (endpoint /{cif}) HARUS didaftarin SETELAH company_v2_router,
+# alasan sama kayak v1 - biar path statis ke-match duluan.
+api_router_v2.include_router(company_cif_v2_router, prefix="/company", tags=["company_cif_v2"])

@@ -1,3 +1,5 @@
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,6 +24,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    elapsed = time.time() - start_time
+    print(f"{request.method} {request.url.path} took {elapsed:.4f} seconds")
+    return response
+
 
 app.include_router(api_router, prefix="/lov/v1")
 

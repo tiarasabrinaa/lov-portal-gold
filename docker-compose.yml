@@ -15,7 +15,6 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
-      - ./scripts:/app/scripts
       - ./secrets/sandbox-lov-760ab321486a.json:/secrets/sandbox-lov-760ab321486a.json:ro
     depends_on:
       - redis

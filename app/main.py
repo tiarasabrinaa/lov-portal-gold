@@ -21,6 +21,9 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
     ],
+    # semua preview/prod deployment Vercel buat frontend-lov-portal (URL-nya beda-beda
+    # tiap deploy, jadi dicocokin lewat regex daripada didaftarin satu-satu)
+    allow_origin_regex=r"https://frontend-lov-portal.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )

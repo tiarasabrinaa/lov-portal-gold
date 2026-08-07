@@ -1,0 +1,40 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: lov-portal-gold-git
+spec:
+  template:
+    metadata:
+      annotations:
+        # api nunggu redis siap dulu sebelum nerima traffic
+        run.googleapis.com/container-dependencies: '{"api":["redis"]}'
+    spec:
+      containers:
+        - name: api
+          image: asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api
+          ports:
+            - containerPort: 8080
+          env:
+            - name: BIGQUERY_PROJECT
+              value: sandbox-lov
+            - name: BIGQUERY_DATASET
+              value: lov_gold
+            - name: BIGQUERY_LOCATION
+              value: asia-southeast2
+            # REDIS_HOST/PORT/PASSWORD sengaja ga di-set - default di config.py
+            # (localhost:6379, no password) udah pas buat sidecar redis di bawah.
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+        - name: redis
+          image: redis:7-alpine
+          startupProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 1
+            failureThreshold: 10
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: 256Mi

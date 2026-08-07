@@ -11,16 +11,28 @@ steps:
       - push
       - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
 
+  # gcloud run deploy cuma bisa 1 image - buat sidecar redis (lihat service.yaml)
+  # kita pakai "services replace" yang baca spec multi-container dari YAML.
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: gcloud
     args:
       - run
-      - deploy
-      - lov-portal-gold-git
-      - "--image=asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+      - services
+      - replace
+      - service.yaml
       - "--region=asia-southeast2"
-      - "--allow-unauthenticated"
-      - "--set-env-vars=BIGQUERY_PROJECT=sandbox-lov,BIGQUERY_DATASET=lov_gold,BIGQUERY_LOCATION=asia-southeast2"
+
+  # "services replace" ga bawa IAM policy - pastiin tetep public (idempotent, aman dipanggil tiap deploy)
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - add-iam-policy-binding
+      - lov-portal-gold-git
+      - "--region=asia-southeast2"
+      - "--member=allUsers"
+      - "--role=roles/run.invoker"
 
 images:
   - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"

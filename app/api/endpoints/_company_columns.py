@@ -91,18 +91,13 @@ async def get_employer_page(
         where_clause = "WHERE LOWER(employer_name) LIKE LOWER(@name)"
         params.append(bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%"))
 
-    count_rows = await run_query(
-        client,
-        f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} {where_clause}",
-        params,
-    )
-    total = count_rows[0]["total"]
-
     offset = (page - 1) * page_size
     rows = await run_query(
         client,
         f"""
-        SELECT {EMPLOYER_PROFILE_COLUMNS}
+        SELECT
+            {EMPLOYER_PROFILE_COLUMNS},
+            COUNT(*) OVER() AS total_count
         FROM {qualified_table('gold_employer_profile')}
         {where_clause}
         ORDER BY employer_name
@@ -110,7 +105,20 @@ async def get_employer_page(
         """,
         params,
     )
-    return rows, total
+
+    if rows:
+        total = rows[0].pop("total_count")
+        for row in rows[1:]:
+            row.pop("total_count", None)
+        return rows, total
+
+    # halaman kosong (0 match atau offset lewat akhir) - baru scan count terpisah di sini
+    count_rows = await run_query(
+        client,
+        f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} {where_clause}",
+        params,
+    )
+    return rows, count_rows[0]["total"]
 
 
 async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:

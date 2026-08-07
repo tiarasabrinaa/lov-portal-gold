@@ -24,11 +24,10 @@ router = APIRouter()
 # ------------------------------------------------------------
 # gold_employer_profile
 #
-# Baca langsung dari BigQuery (belum ada Postgres/VM di production).
-# Pagination & search dilakuin di level SQL (LIMIT/OFFSET, LIKE) - bukan
-# tarik semua baris lalu dipotong di Python, itu yang bikin lemot begitu
-# datanya ratusan ribu baris. Cache Redis-nya per-kombinasi query
-# (nama+halaman). Lookup by-cif ada di router terpisah: company_cif.py.
+# Pure BigQuery, no Redis/Postgres. Pagination & search dilakuin di level
+# SQL (LIMIT/OFFSET, LIKE) - bukan tarik semua baris lalu dipotong di
+# Python, itu yang bikin lemot begitu datanya ratusan ribu baris.
+# Lookup by-cif ada di router terpisah: company_cif.py.
 # ------------------------------------------------------------
 @router.get("/employers", summary="Get all employer profiles (paginated)")
 async def get_all_employers(
@@ -44,7 +43,7 @@ async def get_all_employers(
 
 @router.get(
     "/employer/by-name",
-    summary="Get employer profiles by name (substring, case-insensitive, pure BigQuery, no Redis cache)",
+    summary="Get employer profiles by name (substring, case-insensitive, pure BigQuery)",
 )
 async def get_employer_by_name(
     name: str,

@@ -10,7 +10,7 @@ FastAPI scaffold ready for API development.
 - `/checkout/get_data` for `gold_company`
 - `/post-codes`, `/groups`, `/religions`, `/job-titles`, `/emergency-contacts`, `/educations`, `/occupations`, `/nature-of-businesses`, `/company-contacts`, `/company-addresses`
 
-Copy `.env.example` to `.env` and update `DATABASE_URL` for your PostgreSQL instance.
+Copy `.env.example` to `.env` and set your BigQuery project/dataset/credentials. All data reads go straight to BigQuery - no Redis, no Postgres.
 
 ## Run
 

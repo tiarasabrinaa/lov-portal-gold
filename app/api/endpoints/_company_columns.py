@@ -1,8 +1,5 @@
-import time
-
 from google.cloud import bigquery
 
-from app.core.cache import get_cached_rows
 from app.core.database import qualified_table, run_query
 
 EMPLOYER_PROFILE_COLUMNS = """
@@ -84,47 +81,40 @@ async def get_employer_page(
     """Query 1 halaman gold_employer_profile langsung dari BigQuery (LIMIT/OFFSET di SQL,
     bukan tarik semua baris terus dipotong di Python - itu yang bikin lemot di 800rb baris).
 
-    Belum ada Postgres/VM di production, jadi sementara balik baca BigQuery langsung.
-    Cache-nya PER KOMBINASI (name, page, page_size), TTL settings.cache_ttl_seconds.
-    page/page_size udah divalidasi jadi int sama FastAPI Query(ge=..., le=...) di router,
-    aman diinterpolasi langsung ke LIMIT/OFFSET tanpa perlu parameter.
+    Pure BigQuery - page/page_size udah divalidasi jadi int sama
+    FastAPI Query(ge=..., le=...) di router, aman diinterpolasi langsung ke LIMIT/OFFSET
+    tanpa perlu parameter.
     """
-    cache_key = f"lov:company:employers:name={name or ''}:page={page}:size={page_size}"
+    where_clause = ""
+    params: list[bigquery.ScalarQueryParameter] = []
+    if name:
+        where_clause = "WHERE LOWER(employer_name) LIKE LOWER(@name)"
+        params.append(bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%"))
 
-    async def _fetch() -> dict:
-        where_clause = ""
-        params: list[bigquery.ScalarQueryParameter] = []
-        if name:
-            where_clause = "WHERE LOWER(employer_name) LIKE LOWER(@name)"
-            params.append(bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%"))
+    count_rows = await run_query(
+        client,
+        f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} {where_clause}",
+        params,
+    )
+    total = count_rows[0]["total"]
 
-        count_rows = await run_query(
-            client,
-            f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} {where_clause}",
-            params,
-        )
-        total = count_rows[0]["total"]
-
-        offset = (page - 1) * page_size
-        rows = await run_query(
-            client,
-            f"""
-            SELECT {EMPLOYER_PROFILE_COLUMNS}
-            FROM {qualified_table('gold_employer_profile')}
-            {where_clause}
-            ORDER BY employer_name
-            LIMIT {page_size} OFFSET {offset}
-            """,
-            params,
-        )
-        return {"rows": rows, "total": total}
-
-    result = await get_cached_rows(cache_key, _fetch)
-    return result["rows"], result["total"]
+    offset = (page - 1) * page_size
+    rows = await run_query(
+        client,
+        f"""
+        SELECT {EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table('gold_employer_profile')}
+        {where_clause}
+        ORDER BY employer_name
+        LIMIT {page_size} OFFSET {offset}
+        """,
+        params,
+    )
+    return rows, total
 
 
 async def search_employers_by_name(client: bigquery.Client, name: str) -> list[dict]:
-    """Pure BigQuery, no Redis cache - BQ sudah punya caching sendiri per service account."""
+    """Pure BigQuery - BQ sudah punya caching sendiri per service account."""
     rows = await run_query(
         client,
         f"""
@@ -138,32 +128,20 @@ async def search_employers_by_name(client: bigquery.Client, name: str) -> list[d
     return rows
 
 async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:
-    cache_key = f"lov:company:employer:cif={cif}"
-
-    async def _fetch() -> list[dict]:
-        return await run_query(
-            client,
-            f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM {qualified_table('gold_employer_profile')} WHERE cif = @cif",
-            [bigquery.ScalarQueryParameter("cif", "STRING", cif)],
-        )
-
-    return await get_cached_rows(cache_key, _fetch)
+    return await run_query(
+        client,
+        f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM {qualified_table('gold_employer_profile')} WHERE cif = @cif",
+        [bigquery.ScalarQueryParameter("cif", "STRING", cif)],
+    )
 
 
 async def get_employer_by_employer_id(client: bigquery.Client, employer_id: str) -> list[dict]:
-    cache_key = f"lov:company:employer:employer_id={employer_id}"
-    start_time = time.time()
-    async def _fetch() -> list[dict]:
-        return await run_query(
-            client,
-            f"""
-            SELECT {EMPLOYER_PROFILE_COLUMNS}
-            FROM {qualified_table('gold_employer_profile')}
-            WHERE employer_id = @employer_id
-            """,
-            [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)],
-        )
-    end_time = time.time() - start_time
-    print(f"get_employer_by_employer_id took {end_time:.8f} seconds")
-
-    return await get_cached_rows(cache_key, _fetch)
+    return await run_query(
+        client,
+        f"""
+        SELECT {EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table('gold_employer_profile')}
+        WHERE employer_id = @employer_id
+        """,
+        [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)],
+    )

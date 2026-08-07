@@ -8,7 +8,7 @@ from app.api.router import api_router
 app = FastAPI(
     title="LOV Portal API",
     version="0.1.0",
-    description="FastAPI scaffold with Swagger UI enabled for API development.",
+    description="FastAPI for Serving Layer EDP-LoV to Surrounding.",
 )
 
 app.add_middleware(

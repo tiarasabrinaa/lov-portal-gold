@@ -8,6 +8,7 @@ from app.api.endpoints._company_columns import (
     get_employer_by_employer_id as bq_get_employer_by_employer_id,
     get_employer_page,
 )
+from app.core.cache import get_cached_rows
 from app.core.database import get_db, qualified_table, run_query
 from app.schemas.company import (
     AddressRead,
@@ -23,26 +24,37 @@ router = APIRouter()
 # ------------------------------------------------------------
 # gold_employer_profile
 #
-# v2: pure BigQuery, no Redis. Pagination & search dilakuin di level
-# SQL (LIMIT/OFFSET, LIKE) - bukan tarik semua baris lalu dipotong di
-# Python, itu yang bikin lemot begitu datanya ratusan ribu baris.
+# v2: BigQuery + Redis cache (no Postgres). Pagination & search dilakuin di
+# level SQL (LIMIT/OFFSET, LIKE) - bukan tarik semua baris lalu dipotong di
+# Python, itu yang bikin lemot begitu datanya ratusan ribu baris. Cache-nya
+# PER KOMBINASI (name, page, page_size), TTL settings.cache_ttl_seconds.
+# Versi pure-BQ tanpa cache ada di router v1: company.py.
 # Lookup by-cif ada di router terpisah: company_cif_v2.py.
 # ------------------------------------------------------------
-@router.get("/employers", summary="Get all employer profiles (paginated, pure BigQuery)")
+@router.get("/employers", summary="Get all employer profiles (paginated, cached via Redis)")
 async def get_all_employers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     client: bigquery.Client = Depends(get_db),
 ) -> PaginatedEmployers:
-    rows, total = await get_employer_page(client, None, page, page_size)
+    cache_key = f"lov:v2:company:employers:name=:page={page}:size={page_size}"
+
+    async def _fetch() -> dict:
+        rows, total = await get_employer_page(client, None, page, page_size)
+        return {"rows": rows, "total": total}
+
+    result = await get_cached_rows(cache_key, _fetch)
     return PaginatedEmployers(
-        items=[EmployerProfileRead(**row) for row in rows], total=total, page=page, page_size=page_size
+        items=[EmployerProfileRead(**row) for row in result["rows"]],
+        total=result["total"],
+        page=page,
+        page_size=page_size,
     )
 
 
 @router.get(
     "/employer/by-name",
-    summary="Get employer profiles by name (substring, case-insensitive, paginated, pure BigQuery)",
+    summary="Get employer profiles by name (substring, case-insensitive, paginated, cached via Redis)",
 )
 async def get_employer_by_name(
     name: str,
@@ -50,17 +62,30 @@ async def get_employer_by_name(
     page_size: int = Query(20, ge=1, le=200),
     client: bigquery.Client = Depends(get_db),
 ) -> PaginatedEmployers:
-    rows, total = await get_employer_page(client, name, page, page_size)
+    cache_key = f"lov:v2:company:employers:name={name}:page={page}:size={page_size}"
+
+    async def _fetch() -> dict:
+        rows, total = await get_employer_page(client, name, page, page_size)
+        return {"rows": rows, "total": total}
+
+    result = await get_cached_rows(cache_key, _fetch)
     return PaginatedEmployers(
-        items=[EmployerProfileRead(**row) for row in rows], total=total, page=page, page_size=page_size
+        items=[EmployerProfileRead(**row) for row in result["rows"]],
+        total=result["total"],
+        page=page,
+        page_size=page_size,
     )
 
 
-@router.get("/employer/by-employer-id/{employer_id}", summary="Get employer profile by employer_id")
+@router.get(
+    "/employer/by-employer-id/{employer_id}",
+    summary="Get employer profile by employer_id (cached via Redis)",
+)
 async def get_employer_by_employer_id(
     employer_id: str, client: bigquery.Client = Depends(get_db)
 ) -> list[EmployerProfileRead]:
-    rows = await bq_get_employer_by_employer_id(client, employer_id)
+    cache_key = f"lov:v2:company:employer:employer_id={employer_id}"
+    rows = await get_cached_rows(cache_key, lambda: bq_get_employer_by_employer_id(client, employer_id))
     return [EmployerProfileRead(**row) for row in rows]
 
 

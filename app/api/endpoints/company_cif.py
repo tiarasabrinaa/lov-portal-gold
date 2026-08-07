@@ -7,17 +7,15 @@ from app.api.endpoints._company_columns import (
     STAKEHOLDER_COLUMNS,
     get_employer_by_cif as bq_get_employer_by_cif,
 )
-from app.core.cache import get_cached_rows
 from app.core.database import get_db, qualified_table, run_query
 from app.schemas.company import AddressRead, EmployerAccountRead, EmployerProfileRead, StakeholderRead
 
 router = APIRouter()
 
 
-@router.get("/employer/{cif}", summary="Get employer profile by cif (cached via Redis)")
+@router.get("/employer/{cif}", summary="Get employer profile by cif (pure BigQuery)")
 async def get_employer_by_cif(cif: str, client: bigquery.Client = Depends(get_db)) -> list[EmployerProfileRead]:
-    cache_key = f"lov:v1:company:employer:cif={cif}"
-    rows = await get_cached_rows(cache_key, lambda: bq_get_employer_by_cif(client, cif))
+    rows = await bq_get_employer_by_cif(client, cif)
     return [EmployerProfileRead(**row) for row in rows]
 
 

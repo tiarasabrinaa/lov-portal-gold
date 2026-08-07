@@ -34,10 +34,10 @@ api_router.include_router(nature_of_business_router, prefix="/nature-of-business
 
 
 # ------------------------------------------------------------
-# v2: pure BigQuery, no Redis/Postgres - buat banding-bandingin sama v1
-# (BigQuery + Redis cache) di company.py/company_cif.py. Mounted terpisah
-# di /lov/v2 lewat app.main, router ini cuma isi company + company_cif
-# soalnya cuma itu yang punya varian cached (v1) vs pure (v2).
+# v2: BigQuery + Redis cache - buat banding-bandingin sama v1 (pure
+# BigQuery, no Redis/Postgres) di company.py/company_cif.py. Mounted
+# terpisah di /lov/v2 lewat app.main, router ini cuma isi company +
+# company_cif soalnya cuma itu yang punya varian pure (v1) vs cached (v2).
 # ------------------------------------------------------------
 api_router_v2 = APIRouter()
 api_router_v2.include_router(company_v2_router, prefix="/company", tags=["company_v2"])

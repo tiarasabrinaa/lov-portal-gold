@@ -7,7 +7,6 @@ from app.api.endpoints._company_columns import (
     STAKEHOLDER_COLUMNS,
     get_employer_by_employer_id as bq_get_employer_by_employer_id,
     get_employer_page,
-    search_employers_by_name,
 )
 from app.core.database import get_db, qualified_table, run_query
 from app.schemas.company import (
@@ -43,15 +42,17 @@ async def get_all_employers(
 
 @router.get(
     "/employer/by-name",
-    summary="Get employer profiles by name (substring, case-insensitive, pure BigQuery)",
+    summary="Get employer profiles by name (substring, case-insensitive, paginated)",
 )
 async def get_employer_by_name(
     name: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
     client: bigquery.Client = Depends(get_db),
 ) -> PaginatedEmployers:
-    rows = await search_employers_by_name(client, name)
+    rows, total = await get_employer_page(client, name, page, page_size)
     return PaginatedEmployers(
-        items=[EmployerProfileRead(**row) for row in rows], total=len(rows), page=1, page_size=len(rows)
+        items=[EmployerProfileRead(**row) for row in rows], total=total, page=page, page_size=page_size
     )
 
 

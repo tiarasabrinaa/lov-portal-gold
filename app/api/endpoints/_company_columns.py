@@ -113,20 +113,6 @@ async def get_employer_page(
     return rows, total
 
 
-async def search_employers_by_name(client: bigquery.Client, name: str) -> list[dict]:
-    """Pure BigQuery - BQ sudah punya caching sendiri per service account."""
-    rows = await run_query(
-        client,
-        f"""
-        SELECT {EMPLOYER_PROFILE_COLUMNS}
-        FROM {qualified_table('gold_employer_profile')}
-        WHERE LOWER(employer_name) LIKE LOWER(@name)
-        ORDER BY employer_name
-        """,
-        [bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%")],
-    )
-    return rows
-
 async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:
     return await run_query(
         client,

@@ -1,0 +1,109 @@
+Nature of Business (nob) lov_gold dummy ddl dml · SQL
+-- ============================================================
+-- NOB (NATURE OF BUSINESS) lov_GOLD - BigQuery Standard SQL
+-- Dataset: lov_gold
+-- 1 tabel: nob
+--
+-- Catatan:
+-- - Kolom persis ngikutin app/schemas/nature_of_business.py
+--   (NatureOfBusinessRead): nob_id, master_code,
+--   master_description, source_system, original_code,
+--   original_description, snapshot_date.
+-- - 1 master_code punya 2 baris, satu per source_system (SIBS,
+--   ASCEND), karena tiap sistem asal punya istilah/kode sendiri
+--   buat business yang sama. Contoh: master_code MC-001
+--   ("Perbankan Umum") dipetain beda-beda:
+--     * SIBS   -> original_description "Finansial"
+--     * ASCEND -> original_description "Perbankan & Jasa Keuangan Korporat"
+--   Pola ini diulang buat semua 5 master_code di bawah.
+-- - app/api/endpoints/nature_of_business.py udah diupdate jadi 2 endpoint:
+--     * GET /nature-of-business/                -> get all, gak ada filter
+--     * GET /nature-of-business/{master_code}    -> get by master_code,
+--       plus query param opsional ?source_system= buat filter salah
+--       satu source, contoh:
+--         GET /nature-of-business/MC-001
+--         GET /nature-of-business/MC-001?source_system=SIBS
+-- - nob_id NOB01..NOB05 dipakai buat row source_system=SIBS, biar
+--   tetep konsisten sama nob_id yang udah dipakai di
+--   `lov_gold.view_employer` (lihat ddl-dml.txt). Row ASCEND pakai
+--   nob_id turunan (mis. NOB01-ASCEND) supaya tetep unique.
+-- ============================================================
+
+CREATE SCHEMA IF NOT EXISTS `lov_gold`;
+
+-- ------------------------------------------------------------
+-- 1. nob
+-- ------------------------------------------------------------
+CREATE OR REPLACE TABLE `lov_gold.nob` (
+  nob_id                STRING  NOT NULL,
+  master_code           STRING,
+  master_description    STRING,
+  source_system         STRING,
+  original_code         STRING,
+  original_description  STRING,
+  snapshot_date         DATE    NOT NULL,
+  PRIMARY KEY (nob_id) NOT ENFORCED
+);
+
+-- ============================================================
+-- DML - SAMPLE DATA (10 baris: 5 master_code x 2 source_system
+-- masing-masing: SIBS, ASCEND)
+-- ============================================================
+
+INSERT INTO `lov_gold.nob`
+(nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date)
+VALUES
+-- MC-001 · Perbankan Umum
+('NOB01',       'MC-001','Perbankan Umum','SIBS',  'FIN',        'Finansial',                          DATE '2026-07-01'),
+('NOB01-ASCEND','MC-001','Perbankan Umum','ASCEND','BANK-CORP',  'Perbankan & Jasa Keuangan Korporat', DATE '2026-07-01'),
+
+-- MC-002 · Perdagangan Besar / Distribusi
+('NOB02',       'MC-002','Perdagangan Besar','SIBS',  'TRD',        'Perdagangan',               DATE '2026-07-01'),
+('NOB02-ASCEND','MC-002','Perdagangan Besar','ASCEND','TRADE-DIST', 'Perdagangan & Distribusi',  DATE '2026-07-01'),
+
+-- MC-003 · Konstruksi
+('NOB03',       'MC-003','Konstruksi','SIBS',  'CONST',      'Konstruksi',                      DATE '2026-07-01'),
+('NOB03-ASCEND','MC-003','Konstruksi','ASCEND','CONSTR-COM', 'Konstruksi & Properti Komersial', DATE '2026-07-01'),
+
+-- MC-004 · Industri Makanan
+('NOB04',       'MC-004','Industri Makanan','SIBS',  'MFG',       'Manufaktur',                DATE '2026-07-01'),
+('NOB04-ASCEND','MC-004','Industri Makanan','ASCEND','FOOD-PROC', 'Industri Pengolahan Makanan', DATE '2026-07-01'),
+
+-- MC-005 · Perkebunan
+('NOB05',       'MC-005','Perkebunan','SIBS',  'AGRI',       'Pertanian',                DATE '2026-07-01'),
+('NOB05-ASCEND','MC-005','Perkebunan','ASCEND','AGRI-PLANT', 'Pertanian & Perkebunan',   DATE '2026-07-01');
+
+
+-- ============================================================
+-- VERIFIKASI
+-- ============================================================
+
+-- 1. Cek tiap master_code punya 2 source_system (harus semua = 2)
+SELECT master_code, COUNT(DISTINCT source_system) AS total_source_system
+FROM `lov_gold.nob`
+GROUP BY master_code
+ORDER BY master_code;
+
+-- 2. Orphan check ke view_employer.nob_id (kalau ddl-dml.txt view_employer
+--    udah di-load duluan; harusnya 0 row karena NOB01..NOB05 dipakai di sana)
+SELECT e.nob_id
+FROM `lov_gold.view_employer` e
+LEFT JOIN `lov_gold.nob` n ON e.nob_id = n.nob_id
+WHERE n.nob_id IS NULL;
+
+-- 3. Simulasi GET /nature-of-business/ (get all)
+SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
+FROM `lov_gold.nob`
+ORDER BY master_code;
+
+-- 4. Simulasi GET /nature-of-business/MC-001 (get by master_code, tanpa filter source)
+SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
+FROM `lov_gold.nob`
+WHERE master_code = 'MC-001'
+ORDER BY master_code;
+
+-- 5. Simulasi GET /nature-of-business/MC-001?source_system=SIBS (get by master_code + filter source)
+SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
+FROM `lov_gold.nob`
+WHERE master_code = 'MC-001' AND source_system = 'SIBS'
+ORDER BY master_code;

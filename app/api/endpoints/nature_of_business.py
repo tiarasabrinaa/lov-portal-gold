@@ -28,13 +28,13 @@ async def get_all_nature_of_business(client: bigquery.Client = Depends(get_db)) 
     )
 
 
-@router.get("/{master_code}", summary="Get nature of business data by master code")
-async def get_nature_of_business_by_master_code(
-    master_code: str,
+@router.get("/{nob_id}", summary="Get nature of business data by id")
+async def get_nature_of_business_by_id(
+    nob_id: str,
     source_system: str | None = Query(None, description="Filter by source system, e.g. SIBS, ASCEND"),
     client: bigquery.Client = Depends(get_db),
 ) -> list[NatureOfBusinessRead]:
-    params = [bigquery.ScalarQueryParameter("master_code", "STRING", master_code)]
+    params = [bigquery.ScalarQueryParameter("nob_id", "STRING", nob_id)]
     source_filter = ""
     if source_system:
         source_filter = "AND source_system = @source_system"
@@ -52,7 +52,7 @@ async def get_nature_of_business_by_master_code(
             original_description,
             snapshot_date
         FROM {qualified_table("nob")}
-        WHERE master_code = @master_code
+        WHERE nob_id = @nob_id
         {source_filter}
         ORDER BY master_code
         """,

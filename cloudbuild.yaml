@@ -4,13 +4,22 @@ steps:
       - build
       - --no-cache
       - "-t"
-      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api:$BUILD_ID"
       - .
 
   - name: "gcr.io/cloud-builders/docker"
     args:
       - push
-      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+      - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api:$BUILD_ID"
+
+  # tag image pakai $BUILD_ID biar tiap deploy beda - kalau tag-nya sama terus (mis. "latest"),
+  # "services replace" ga akan bikin revision baru karena manifest-nya keliatan gak berubah.
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
+    args:
+      - "-c"
+      - |
+        sed -i "s|cloud-run-source-deploy/lov-portal-api|cloud-run-source-deploy/lov-portal-api:$BUILD_ID|" service.yaml
 
   # gcloud run deploy cuma bisa 1 image - buat sidecar redis (lihat service.yaml)
   # kita pakai "services replace" yang baca spec multi-container dari YAML.
@@ -36,7 +45,7 @@ steps:
       - "--role=roles/run.invoker"
 
 images:
-  - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
+  - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api:$BUILD_ID"
 
 options:
   logging: CLOUD_LOGGING_ONLY

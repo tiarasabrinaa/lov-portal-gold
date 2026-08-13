@@ -2,6 +2,7 @@ steps:
   - name: "gcr.io/cloud-builders/docker"
     args:
       - build
+      - --no-cache
       - "-t"
       - "asia-southeast2-docker.pkg.dev/sandbox-lov/cloud-run-source-deploy/lov-portal-api"
       - .

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from google.cloud import bigquery
 
 from app.api.endpoints._helpers import fetch_all
@@ -15,14 +15,14 @@ async def get_all_nature_of_business(client: bigquery.Client = Depends(get_db)) 
         f"""
         SELECT
             nob_id,
-            master_code,
-            master_description,
-            source_system,
-            original_code,
-            original_description,
-            snapshot_date
+            business_date,
+            int_indcode,
+            corp_short_desc,
+            corp_desc,
+            risk_level,
+            update_date
         FROM {qualified_table("nob")}
-        ORDER BY master_code
+        ORDER BY nob_id
         """,
         NatureOfBusinessRead,
     )
@@ -31,31 +31,22 @@ async def get_all_nature_of_business(client: bigquery.Client = Depends(get_db)) 
 @router.get("/{nob_id}", summary="Get nature of business data by id")
 async def get_nature_of_business_by_id(
     nob_id: str,
-    source_system: str | None = Query(None, description="Filter by source system, e.g. SIBS, ASCEND"),
     client: bigquery.Client = Depends(get_db),
 ) -> list[NatureOfBusinessRead]:
-    params = [bigquery.ScalarQueryParameter("nob_id", "STRING", nob_id)]
-    source_filter = ""
-    if source_system:
-        source_filter = "AND source_system = @source_system"
-        params.append(bigquery.ScalarQueryParameter("source_system", "STRING", source_system))
-
     return await fetch_all(
         client,
         f"""
         SELECT
             nob_id,
-            master_code,
-            master_description,
-            source_system,
-            original_code,
-            original_description,
-            snapshot_date
+            business_date,
+            int_indcode,
+            corp_short_desc,
+            corp_desc,
+            risk_level,
+            update_date
         FROM {qualified_table("nob")}
         WHERE nob_id = @nob_id
-        {source_filter}
-        ORDER BY master_code
         """,
         NatureOfBusinessRead,
-        params,
+        [bigquery.ScalarQueryParameter("nob_id", "STRING", nob_id)],
     )

@@ -3,20 +3,25 @@ from google.cloud import bigquery
 from app.core.database import qualified_table, run_query
 
 EMPLOYER_PROFILE_COLUMNS = """
-    employer_id,
-    group_id,
-    nob_id,
-    cif,
-    employer_name,
-    employer_code,
-    industry,
-    tiering_code,
-    tiering_label,
-    group_name,
-    primary_email,
-    primary_contact_no,
-    snapshot_date
+    e.employer_id,
+    e.group_id,
+    e.nob_id,
+    n.corp_short_desc,
+    n.corp_desc,
+    e.cif,
+    e.employer_name,
+    e.employer_code,
+    e.industry,
+    e.tiering_code,
+    e.tiering_label,
+    e.group_name,
+    e.primary_email,
+    e.primary_contact_no,
+    e.snapshot_date
 """
+
+# nob_id ada di gold_employer_profile & nob - kolom EMPLOYER_PROFILE_COLUMNS
+# di atas dikasih alias e./n. biar gak ambigu pas di-JOIN.
 
 EMPLOYER_ACCOUNT_COLUMNS = """
     account_id,
@@ -88,7 +93,7 @@ async def get_employer_page(
     where_clause = ""
     params: list[bigquery.ScalarQueryParameter] = []
     if name:
-        where_clause = "WHERE LOWER(employer_name) LIKE LOWER(@name)"
+        where_clause = "WHERE LOWER(e.employer_name) LIKE LOWER(@name)"
         params.append(bigquery.ScalarQueryParameter("name", "STRING", f"%{name}%"))
 
     offset = (page - 1) * page_size
@@ -98,9 +103,10 @@ async def get_employer_page(
         SELECT
             {EMPLOYER_PROFILE_COLUMNS},
             COUNT(*) OVER() AS total_count
-        FROM {qualified_table('gold_employer_profile')}
+        FROM {qualified_table('gold_employer_profile')} e
+        LEFT JOIN {qualified_table('nob')} n ON e.nob_id = n.nob_id
         {where_clause}
-        ORDER BY employer_name
+        ORDER BY e.employer_name
         LIMIT {page_size} OFFSET {offset}
         """,
         params,
@@ -115,7 +121,7 @@ async def get_employer_page(
     # halaman kosong (0 match atau offset lewat akhir) - baru scan count terpisah di sini
     count_rows = await run_query(
         client,
-        f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} {where_clause}",
+        f"SELECT COUNT(*) AS total FROM {qualified_table('gold_employer_profile')} e {where_clause}",
         params,
     )
     return rows, count_rows[0]["total"]
@@ -124,7 +130,12 @@ async def get_employer_page(
 async def get_employer_by_cif(client: bigquery.Client, cif: str) -> list[dict]:
     return await run_query(
         client,
-        f"SELECT {EMPLOYER_PROFILE_COLUMNS} FROM {qualified_table('gold_employer_profile')} WHERE cif = @cif",
+        f"""
+        SELECT {EMPLOYER_PROFILE_COLUMNS}
+        FROM {qualified_table('gold_employer_profile')} e
+        LEFT JOIN {qualified_table('nob')} n ON e.nob_id = n.nob_id
+        WHERE e.cif = @cif
+        """,
         [bigquery.ScalarQueryParameter("cif", "STRING", cif)],
     )
 
@@ -134,8 +145,9 @@ async def get_employer_by_employer_id(client: bigquery.Client, employer_id: str)
         client,
         f"""
         SELECT {EMPLOYER_PROFILE_COLUMNS}
-        FROM {qualified_table('gold_employer_profile')}
-        WHERE employer_id = @employer_id
+        FROM {qualified_table('gold_employer_profile')} e
+        LEFT JOIN {qualified_table('nob')} n ON e.nob_id = n.nob_id
+        WHERE e.employer_id = @employer_id
         """,
         [bigquery.ScalarQueryParameter("employer_id", "STRING", employer_id)],
     )

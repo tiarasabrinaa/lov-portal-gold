@@ -7,6 +7,8 @@ class EmployerProfileRead(BaseModel):
     employer_id: str
     group_id: str | None = None
     nob_id: str | None = None
+    corp_short_desc: str | None = None
+    corp_desc: str | None = None
     cif: str
     employer_name: str
     employer_code: str | None = None

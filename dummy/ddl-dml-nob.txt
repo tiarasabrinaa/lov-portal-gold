@@ -4,32 +4,34 @@ Nature of Business (nob) lov_gold dummy ddl dml · SQL
 -- Dataset: lov_gold
 -- 1 tabel: nob
 --
--- Catatan:
--- - Kolom persis ngikutin app/schemas/nature_of_business.py
---   (NatureOfBusinessRead): nob_id, master_code,
---   master_description, source_system, original_code,
---   original_description, snapshot_date.
--- - nob_id itu identitas si business-nya sendiri, GAK ada
---   hubungannya sama dari source_system mana asalnya. Jadi 1
---   nob_id yang SAMA dipakai ulang di beberapa baris, satu per
---   source_system (SIBS, ASCEND), karena tiap sistem asal punya
---   istilah/kode sendiri buat business yang sama. Contoh: nob_id
---   NOB01 ("Perbankan Umum") muncul 2x:
---     * SIBS   -> original_description "Finansial"
---     * ASCEND -> original_description "Perbankan & Jasa Keuangan Korporat"
---   Pola ini diulang buat semua 5 nob_id di bawah. Makanya PRIMARY
---   KEY tabel ini gabungan (nob_id, source_system), bukan nob_id
---   doang.
+-- Update 2026-08-21: skema nob DIGANTI TOTAL, ngikutin sumber data
+-- baru. Kolom lama (master_code, master_description, source_system,
+-- original_code, original_description, snapshot_date) DIHAPUS semua,
+-- diganti:
+--   nob_id, business_date, int_indcode, corp_short_desc, corp_desc,
+--   risk_level, update_date
+-- - nob_id sekarang PRIMARY KEY tunggal (bukan composite lagi sama
+--   source_system - konsep "1 nob_id banyak source_system" di versi
+--   lama udah gak berlaku). nob_id ini yang jadi penghubung ke
+--   `lov_gold.gold_employer_profile.nob_id` (lihat
+--   dummy/ddl-dml-company-atwork-v3.txt).
+-- - risk_level cuma 2 kemungkinan isi: 'L' (Low) atau 'H' (High).
+-- - business_date = tanggal data ini berlaku/dilaporkan, update_date
+--   = kapan baris ini terakhir di-update - dua-duanya bisa beda.
 -- - app/api/endpoints/nature_of_business.py punya 2 endpoint:
---     * GET /nature-of-business/          -> get all, gak ada filter
---     * GET /nature-of-business/{nob_id}   -> get by id, tanpa filter
---       balikin semua source_system buat id itu; plus query param
---       opsional ?source_system= buat narrow ke satu, contoh:
---         GET /nature-of-business/NOB01               -> 2 baris (SIBS + ASCEND)
---         GET /nature-of-business/NOB01?source_system=SIBS -> 1 baris
--- - nob_id NOB01..NOB05 sengaja disamain sama nob_id yang udah
---   dipakai di `lov_gold.view_employer` (lihat ddl-dml.txt), biar
---   relasinya tetep konsisten kalau dua-duanya di-load.
+--     * GET /nature-of-business/          -> get all
+--     * GET /nature-of-business/{nob_id}   -> get by id (list, 0/1
+--       baris karena nob_id sekarang unik)
+--   Filter ?source_system= yang dulu ada di endpoint kedua DIHAPUS
+--   karena kolomnya udah gak ada.
+-- - nob_id diisi NOB01..NOB20 - ini SEMUA nob_id yang nyata dipakai di
+--   `lov_gold.gold_employer_profile` (800rb+ baris riil, dicek lewat
+--   GROUP BY nob_id, COUNT(*)). corp_short_desc per nob_id disamain ke
+--   `industry` yang paling dominan buat nob_id itu di data riil
+--   (GROUP BY nob_id, industry ORDER BY COUNT(*) DESC), biar join dari
+--   company/employer endpoints ke nob ga menghasilkan NULL. int_indcode
+--   pakai kode ala-KBLI yang cocok sama industri masing-masing (dummy,
+--   bukan hasil lookup KBLI resmi).
 -- ============================================================
 
 CREATE SCHEMA IF NOT EXISTS `lov_gold`;
@@ -38,75 +40,89 @@ CREATE SCHEMA IF NOT EXISTS `lov_gold`;
 -- 1. nob
 -- ------------------------------------------------------------
 CREATE OR REPLACE TABLE `lov_gold.nob` (
-  nob_id                STRING  NOT NULL,
-  master_code           STRING,
-  master_description    STRING,
-  source_system         STRING,
-  original_code         STRING,
-  original_description  STRING,
-  snapshot_date         DATE    NOT NULL,
-  PRIMARY KEY (nob_id, source_system) NOT ENFORCED
+  nob_id            STRING  NOT NULL,
+  business_date     DATE,
+  int_indcode       STRING,
+  corp_short_desc   STRING,
+  corp_desc         STRING,
+  risk_level        STRING,  -- cuma 'L' (Low) atau 'H' (High)
+  update_date       DATE,
+  PRIMARY KEY (nob_id) NOT ENFORCED
 );
 
 -- ============================================================
--- DML - SAMPLE DATA (10 baris: 5 nob_id x 2 source_system
--- masing-masing: SIBS, ASCEND)
+-- DML - SAMPLE DATA (20 baris, 1 per nob_id)
+--
+-- Update 2026-08-21: diperluas dari 5 -> 20 baris. gold_employer_profile
+-- (lov_gold, 800rb+ baris) ternyata pakai nob_id NOB01..NOB20, bukan cuma
+-- NOB01..NOB05 - kalau nob cuma diisi 5 baris, join dari company/employer
+-- endpoints ke nob buat nob_id NOB06..NOB20 hasilnya NULL semua di
+-- corp_short_desc/corp_desc. corp_short_desc di bawah disamain ke
+-- `industry` yang paling dominan per nob_id di gold_employer_profile riil
+-- (dicek pakai GROUP BY nob_id, industry ORDER BY COUNT(*) DESC).
 -- ============================================================
 
 INSERT INTO `lov_gold.nob`
-(nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date)
+(nob_id, business_date, int_indcode, corp_short_desc, corp_desc, risk_level, update_date)
 VALUES
--- NOB01 · Perbankan Umum
-('NOB01','MC-001','Perbankan Umum','SIBS',  'FIN',       'Finansial',                          DATE '2026-07-01'),
-('NOB01','MC-001','Perbankan Umum','ASCEND','BANK-CORP', 'Perbankan & Jasa Keuangan Korporat', DATE '2026-07-01'),
-
--- NOB02 · Perdagangan Besar / Distribusi
-('NOB02','MC-002','Perdagangan Besar','SIBS',  'TRD',       'Perdagangan',              DATE '2026-07-01'),
-('NOB02','MC-002','Perdagangan Besar','ASCEND','TRADE-DIST','Perdagangan & Distribusi', DATE '2026-07-01'),
-
--- NOB03 · Konstruksi
-('NOB03','MC-003','Konstruksi','SIBS',  'CONST',     'Konstruksi',                      DATE '2026-07-01'),
-('NOB03','MC-003','Konstruksi','ASCEND','CONSTR-COM','Konstruksi & Properti Komersial', DATE '2026-07-01'),
-
--- NOB04 · Industri Makanan
-('NOB04','MC-004','Industri Makanan','SIBS',  'MFG',      'Manufaktur',                  DATE '2026-07-01'),
-('NOB04','MC-004','Industri Makanan','ASCEND','FOOD-PROC','Industri Pengolahan Makanan', DATE '2026-07-01'),
-
--- NOB05 · Perkebunan
-('NOB05','MC-005','Perkebunan','SIBS',  'AGRI',      'Pertanian',              DATE '2026-07-01'),
-('NOB05','MC-005','Perkebunan','ASCEND','AGRI-PLANT','Pertanian & Perkebunan', DATE '2026-07-01');
+('NOB01', DATE '2026-07-30', '64190', 'Perbankan Umum',           'Bank Umum Devisa dan Jasa Keuangan Korporat',              'L', DATE '2026-08-21'),
+('NOB02', DATE '2026-07-30', '65111', 'Asuransi Jiwa',            'Asuransi Jiwa dan Produk Proteksi Individu',               'L', DATE '2026-08-21'),
+('NOB03', DATE '2026-07-30', '46900', 'Distribusi Barang Konsumsi','Perdagangan Besar dan Distribusi Barang Konsumsi',        'L', DATE '2026-08-21'),
+('NOB04', DATE '2026-07-30', '47111', 'Minimarket',               'Perdagangan Eceran Melalui Minimarket/Swalayan',           'L', DATE '2026-08-21'),
+('NOB05', DATE '2026-07-30', '41013', 'Konstruksi Komersial',     'Konstruksi Bangunan Gedung Komersial',                     'H', DATE '2026-08-21'),
+('NOB06', DATE '2026-07-30', '42101', 'Infrastruktur Jalan Tol',  'Konstruksi dan Pengoperasian Jalan Tol',                   'H', DATE '2026-08-21'),
+('NOB07', DATE '2026-07-30', '10790', 'Industri Makanan',         'Industri Pengolahan Makanan Lainnya',                      'L', DATE '2026-08-21'),
+('NOB08', DATE '2026-07-30', '14111', 'Garmen',                   'Industri Pakaian Jadi dan Tekstil',                        'L', DATE '2026-08-21'),
+('NOB09', DATE '2026-07-30', '01262', 'Perkebunan Sawit',         'Perkebunan Kelapa Sawit',                                  'H', DATE '2026-08-21'),
+('NOB10', DATE '2026-07-30', '03220', 'Budidaya Perikanan',       'Perikanan Budidaya Air Tawar dan Laut',                    'H', DATE '2026-08-21'),
+('NOB11', DATE '2026-07-30', '62010', 'Pengembangan Aplikasi',    'Aktivitas Pemrograman dan Pengembangan Perangkat Lunak',   'L', DATE '2026-08-21'),
+('NOB12', DATE '2026-07-30', '47912', 'Marketplace Online',       'Perdagangan Eceran Melalui Platform E-Commerce',           'L', DATE '2026-08-21'),
+('NOB13', DATE '2026-07-30', '86103', 'Layanan Kesehatan Swasta', 'Aktivitas Rumah Sakit dan Klinik Swasta',                  'L', DATE '2026-08-21'),
+('NOB14', DATE '2026-07-30', '46441', 'Distribusi Obat',          'Perdagangan Besar Farmasi dan Alat Kesehatan',             'L', DATE '2026-08-21'),
+('NOB15', DATE '2026-07-30', '85431', 'Universitas Swasta',       'Pendidikan Tinggi Swasta',                                 'L', DATE '2026-08-21'),
+('NOB16', DATE '2026-07-30', '53202', 'Jasa Pengiriman',          'Aktivitas Kurir dan Jasa Pengiriman Paket',                'L', DATE '2026-08-21'),
+('NOB17', DATE '2026-07-30', '55111', 'Hotel Bintang 4',          'Penyediaan Akomodasi Hotel Berbintang',                    'H', DATE '2026-08-21'),
+('NOB18', DATE '2026-07-30', '05101', 'Pertambangan Batu Bara',   'Pertambangan dan Pengambilan Batu Bara',                   'H', DATE '2026-08-21'),
+('NOB19', DATE '2026-07-30', '06100', 'Hulu Migas',               'Pertambangan Minyak dan Gas Bumi Hulu',                    'H', DATE '2026-08-21'),
+('NOB20', DATE '2026-07-30', '41011', 'Pengembang Perumahan',     'Pengembangan dan Pembangunan Perumahan',                   'H', DATE '2026-08-21');
 
 
 -- ============================================================
 -- VERIFIKASI
 -- ============================================================
 
--- 1. Cek tiap nob_id punya 2 source_system (harus semua = 2)
-SELECT nob_id, COUNT(DISTINCT source_system) AS total_source_system
+-- 1. nob_id harus unik (harusnya semua count = 1)
+SELECT nob_id, COUNT(*) AS total
 FROM `lov_gold.nob`
 GROUP BY nob_id
 ORDER BY nob_id;
 
--- 2. Orphan check ke view_employer.nob_id (kalau ddl-dml.txt view_employer
---    udah di-load duluan; harusnya 0 row karena NOB01..NOB05 dipakai di sana)
+-- 2. risk_level cuma boleh 'L' atau 'H' (harusnya 0 row)
+SELECT nob_id, risk_level
+FROM `lov_gold.nob`
+WHERE risk_level NOT IN ('L', 'H');
+
+-- 3. Orphan check ke gold_employer_profile.nob_id (kalau
+--    ddl-dml-company-atwork-v3.txt udah di-load duluan; harusnya
+--    0 row karena NOB01..NOB05 dipakai di sana)
 SELECT e.nob_id
-FROM `lov_gold.view_employer` e
+FROM `lov_gold.gold_employer_profile` e
 LEFT JOIN `lov_gold.nob` n ON e.nob_id = n.nob_id
 WHERE n.nob_id IS NULL;
 
--- 3. Simulasi GET /nature-of-business/ (get all)
-SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
+-- 4. Simulasi GET /nature-of-business/ (get all)
+SELECT nob_id, business_date, int_indcode, corp_short_desc, corp_desc, risk_level, update_date
 FROM `lov_gold.nob`
-ORDER BY master_code;
+ORDER BY nob_id;
 
--- 4. Simulasi GET /nature-of-business/NOB01 (get by id, tanpa filter source -> 2 baris)
-SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
+-- 5. Simulasi GET /nature-of-business/NOB01 (get by id -> 1 baris)
+SELECT nob_id, business_date, int_indcode, corp_short_desc, corp_desc, risk_level, update_date
 FROM `lov_gold.nob`
-WHERE nob_id = 'NOB01'
-ORDER BY master_code;
+WHERE nob_id = 'NOB01';
 
--- 5. Simulasi GET /nature-of-business/NOB01?source_system=SIBS (get by id + filter source -> 1 baris)
-SELECT nob_id, master_code, master_description, source_system, original_code, original_description, snapshot_date
-FROM `lov_gold.nob`
-WHERE nob_id = 'NOB01' AND source_system = 'SIBS'
-ORDER BY master_code;
+-- 6. Simulasi employer join (dipakai company endpoints buat narik
+--    corp_short_desc & corp_desc bareng data employer)
+SELECT e.employer_id, e.employer_name, e.nob_id, n.corp_short_desc, n.corp_desc
+FROM `lov_gold.gold_employer_profile` e
+LEFT JOIN `lov_gold.nob` n ON e.nob_id = n.nob_id
+ORDER BY e.employer_id;

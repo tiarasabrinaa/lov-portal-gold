@@ -11,7 +11,6 @@ EMPLOYER_PROFILE_COLUMNS = """
     e.cif,
     e.employer_name,
     e.employer_code,
-    e.industry,
     e.tiering_code,
     e.tiering_label,
     e.group_name,

@@ -12,7 +12,6 @@ class EmployerProfileRead(BaseModel):
     cif: str
     employer_name: str
     employer_code: str | None = None
-    industry: str | None = None
     tiering_code: str | None = None
     tiering_label: str | None = None
     group_name: str | None = None

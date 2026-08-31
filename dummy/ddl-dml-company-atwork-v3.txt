@@ -89,7 +89,7 @@ CREATE OR REPLACE TABLE `lov_gold.gold_employer_profile` (
   tiering_label        STRING,
   group_name           STRING,
   primary_email        STRING,
-  primary_contact_no   STRING,
+  primary_contact_no    STRING,
   snapshot_date        DATE    NOT NULL,
   PRIMARY KEY (employer_id) NOT ENFORCED
 );
@@ -178,7 +178,7 @@ CREATE OR REPLACE TABLE `lov_gold.gold_address` (
 -- 1. gold_employer_profile
 INSERT INTO `lov_gold.gold_employer_profile`
 (employer_id, group_id, nob_id, cif, employer_name, employer_code,
- industry, group_name, primary_email, primary_contact_no, snapshot_date)
+ industry, group_name, primary_email, rimary_contact_no, snapshot_date)
 VALUES
 ('EMP001','GRP001','NOB01','1000000001','PT Sinar Abadi Sejahtera Tbk','EC00001',
  'Bank Umum','Sinar Group','info@sinarabadi.co.id','021-5551234', DATE '2026-07-24'),

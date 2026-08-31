@@ -2,6 +2,8 @@ from google.cloud import bigquery
 
 from app.core.database import qualified_table, run_query
 
+EMPLOYER_PROFILE_TABLE = "GD_LOV_EMPLOYER_PROFILE_SPEC"
+
 EMPLOYER_PROFILE_COLUMNS = """
     e.employer_id,
     e.group_id,
@@ -13,6 +15,8 @@ EMPLOYER_PROFILE_COLUMNS = """
     e.employer_code,
     e.tiering_code,
     e.tiering_label,
+    e.is_pks,
+    e.is_ntb,
     e.group_name,
     e.primary_email,
     e.primary_contact_no,
@@ -102,7 +106,7 @@ async def get_employer_page(
         SELECT
             {EMPLOYER_PROFILE_COLUMNS},
             COUNT(*) OVER() AS total_count
-        FROM {qualified_table('gold_employer_profile')} e
+        FROM {qualified_table(EMPLOYER_PROFILE_TABLE)} e
         LEFT JOIN {qualified_table('nob')} n ON e.nob_id = n.nob_id
         {where_clause}
         ORDER BY e.employer_name

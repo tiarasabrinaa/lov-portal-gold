@@ -14,6 +14,8 @@ class EmployerProfileRead(BaseModel):
     employer_code: str | None = None
     tiering_code: str | None = None
     tiering_label: str | None = None
+    is_pks: bool | None = None
+    is_ntb: bool | None = None
     group_name: str | None = None
     primary_email: str | None = None
     primary_contact_no: str | None = None
